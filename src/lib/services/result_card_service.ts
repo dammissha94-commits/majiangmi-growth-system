@@ -77,6 +77,18 @@ export async function getResultCardDetailsForPlayer(
   return getResultCardDetails(latestResultCard, true);
 }
 
+export async function getLatestResultCardDetailsByStore(
+  store_id: string,
+): Promise<PlayerResultCardDetails | null> {
+  const latestResultCard = await getLatestResultCardByStore(store_id);
+
+  if (!latestResultCard) {
+    return null;
+  }
+
+  return getResultCardDetails(latestResultCard, false);
+}
+
 async function getLatestResultCard(): Promise<ResultCard | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -88,6 +100,27 @@ async function getLatestResultCard(): Promise<ResultCard | null> {
 
   if (error) {
     throw new Error(`get_latest_result_card_failed: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function getLatestResultCardByStore(
+  store_id: string,
+): Promise<ResultCard | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("result_cards")
+    .select("*")
+    .eq("store_id", store_id)
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `get_latest_result_card_by_store_failed: ${error.message}`,
+    );
   }
 
   return data;
