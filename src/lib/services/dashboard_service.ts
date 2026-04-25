@@ -1,5 +1,35 @@
 import { createSupabaseServerClient as createClient } from "@/lib/supabase/server";
-import type { DashboardMetric, DashboardSummary, Membership } from "@/types/domain";
+import type {
+  DashboardMetric,
+  DashboardSummary,
+  Membership,
+  Store,
+} from "@/types/domain";
+
+type ShareCountRow = {
+  share_count: number | null;
+};
+
+type CampaignIdRow = {
+  id: string;
+};
+
+export async function getFirstActiveStore(): Promise<Store | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stores")
+    .select("*")
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`get_first_active_store_failed: ${error.message}`);
+  }
+
+  return data;
+}
 
 export async function getTodayReservationCount(
   store_id: string,
@@ -115,6 +145,74 @@ export async function getCouponRedemptionCount(
   return count ?? 0;
 }
 
+export async function getResultCardShareCount(
+  store_id: string,
+): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("result_cards")
+    .select("share_count")
+    .eq("store_id", store_id);
+
+  if (error) {
+    throw new Error(`get_result_card_share_count_failed: ${error.message}`);
+  }
+
+  return ((data ?? []) as ShareCountRow[]).reduce(
+    (total, item) => total + Number(item.share_count ?? 0),
+    0,
+  );
+}
+
+export async function getCampaignCount(store_id: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("campaigns")
+    .select("id", { count: "exact", head: true })
+    .eq("store_id", store_id);
+
+  if (error) {
+    throw new Error(`get_campaign_count_failed: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
+export async function getCampaignParticipantCount(
+  store_id: string,
+): Promise<number> {
+  const supabase = await createClient();
+  const { data: campaigns, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id")
+    .eq("store_id", store_id);
+
+  if (campaignError) {
+    throw new Error(
+      `get_campaign_participant_count_failed: ${campaignError.message}`,
+    );
+  }
+
+  const campaignIds = ((campaigns ?? []) as CampaignIdRow[]).map(
+    (campaign) => campaign.id,
+  );
+
+  if (campaignIds.length === 0) {
+    return 0;
+  }
+
+  const { count, error } = await supabase
+    .from("campaign_participants")
+    .select("id", { count: "exact", head: true })
+    .in("campaign_id", campaignIds);
+
+  if (error) {
+    throw new Error(`get_campaign_participant_count_failed: ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
 export async function getInactiveMembers7Days(
   store_id: string,
 ): Promise<Membership[]> {
@@ -144,27 +242,14 @@ export async function getStoreDashboardSummary(
     returningUsers,
     activeCircles,
     couponRedemptions,
+    resultCardShares,
   ] = await Promise.all([
     getNewMembershipCount(store_id),
     getRepeatMemberCount(store_id),
     getActiveCircleCount(store_id),
     getCouponRedemptionCount(store_id),
+    getResultCardShareCount(store_id),
   ]);
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("result_cards")
-    .select("share_count")
-    .eq("store_id", store_id);
-
-  if (error) {
-    throw new Error(`get_store_dashboard_summary_failed: ${error.message}`);
-  }
-
-  const resultCardShares = (data ?? []).reduce(
-    (total, item) => total + Number(item.share_count ?? 0),
-    0,
-  );
 
   const metrics: DashboardMetric[] = [
     {
