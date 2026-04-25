@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "compliance:check": "node scripts/compliance-check.js"
+    "compliance:check": "node scripts/compliance-check.js",
+    "check:latest-games": "node scripts/check-latest-games.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
