@@ -1,0 +1,12 @@
+# 麻将迷开发规则
+
+必须遵守 AGENTS.md。
+
+每次只做一个任务。
+不要一次性重构全部代码。
+不要写现金输赢、欠款、结算、抽水、赌资相关功能。
+数据库字段使用 snake_case。
+TypeScript 函数使用 camelCase。
+React 组件使用 PascalCase。
+所有页面移动端优先。
+每次修改后运行 npm run lint 和 npm run build。
