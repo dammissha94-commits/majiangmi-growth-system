@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
-  getFirstActiveStore,
   getInactiveMembers7Days,
   listMembershipsWithUsersByStore,
   type MembershipWithUser,
@@ -26,11 +26,7 @@ export default async function AdminMembershipsPage() {
   const pageData = await loadMembershipPageData();
 
   if (pageData.status === "empty") {
-    return <MembershipShell>{renderEmptyState()}</MembershipShell>;
-  }
-
-  if (pageData.status === "error") {
-    return <MembershipShell>{renderErrorState()}</MembershipShell>;
+    return <MembershipShell>{renderNoStoreState()}</MembershipShell>;
   }
 
   const metrics = buildMetrics(pageData.data);
@@ -84,7 +80,7 @@ export default async function AdminMembershipsPage() {
       <section className="mt-6 overflow-hidden rounded-3xl border border-[#dbc99e] bg-[#fff8ea]">
         {pageData.data.members.length === 0 ? (
           <div className="p-6 text-sm leading-7 text-[#4d665e]">
-            当前门店暂无会员数据。
+            暂无会员数据。
           </div>
         ) : (
           pageData.data.members.map((member) => (
@@ -106,8 +102,14 @@ export default async function AdminMembershipsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                   <MetricCard label="会员等级" value={member.member_level} />
-                  <MetricCard label="到店次数" value={`${member.visit_count} 次`} />
-                  <MetricCard label="开局次数" value={`${member.game_count} 局`} />
+                  <MetricCard
+                    label="到店次数"
+                    value={`${member.visit_count} 次`}
+                  />
+                  <MetricCard
+                    label="开局次数"
+                    value={`${member.game_count} 局`}
+                  />
                   <MetricCard
                     label="最近到店"
                     value={formatDateTime(member.last_visit_at)}
@@ -140,32 +142,27 @@ export default async function AdminMembershipsPage() {
 
 async function loadMembershipPageData(): Promise<
   | { status: "empty" }
-  | { status: "error" }
   | { data: MembershipPageData; status: "ready" }
 > {
-  try {
-    const store = await getFirstActiveStore();
+  const store = await getFirstActiveStore();
 
-    if (!store) {
-      return { status: "empty" };
-    }
-
-    const [members, inactiveMembers] = await Promise.all([
-      listMembershipsWithUsersByStore(store.id),
-      getInactiveMembers7Days(store.id),
-    ]);
-
-    return {
-      data: {
-        inactive_member_count: inactiveMembers.length,
-        members,
-        store_name: store.name,
-      },
-      status: "ready",
-    };
-  } catch {
-    return { status: "error" };
+  if (!store) {
+    return { status: "empty" };
   }
+
+  const [members, inactiveMembers] = await Promise.all([
+    listMembershipsWithUsersByStore(store.id),
+    getInactiveMembers7Days(store.id),
+  ]);
+
+  return {
+    data: {
+      inactive_member_count: inactiveMembers.length,
+      members,
+      store_name: store.name,
+    },
+    status: "ready",
+  };
 }
 
 function buildMetrics(data: MembershipPageData): Metric[] {
@@ -219,8 +216,8 @@ function buildSuggestions(data: MembershipPageData): string[] {
   return suggestions;
 }
 
-function isPriorityMember(member_level: string): boolean {
-  return member_level.includes("circle_owner") || member_level.includes("core");
+function isPriorityMember(memberLevel: string): boolean {
+  return memberLevel.includes("circle_owner") || memberLevel.includes("core");
 }
 
 function formatDateTime(value: string | null): string {
@@ -247,25 +244,13 @@ function MembershipShell({ children }: { children: ReactNode }) {
   );
 }
 
-function renderEmptyState() {
+function renderNoStoreState() {
   return (
     <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-8">
       <p className="text-sm font-semibold text-[#9b7428]">会员管理</p>
       <h1 className="mt-3 text-3xl font-semibold">暂无门店数据</h1>
       <p className="mt-3 max-w-2xl leading-7 text-[#4d665e]">
         当前没有可用于展示的 active 门店。添加门店测试数据后，此页会显示真实会员列表。
-      </p>
-    </section>
-  );
-}
-
-function renderErrorState() {
-  return (
-    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-8">
-      <p className="text-sm font-semibold text-[#9b7428]">会员管理</p>
-      <h1 className="mt-3 text-3xl font-semibold">数据读取失败</h1>
-      <p className="mt-3 max-w-2xl leading-7 text-[#4d665e]">
-        请检查 Supabase 环境变量与测试数据配置后重试。
       </p>
     </section>
   );

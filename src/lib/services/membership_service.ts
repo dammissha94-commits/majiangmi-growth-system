@@ -3,7 +3,6 @@ import type {
   Membership,
   MembershipInsert,
   MembershipUpdate,
-  Store,
   User,
 } from "@/types/domain";
 
@@ -11,31 +10,14 @@ export type MembershipWithUser = Membership & {
   users: Pick<User, "display_name" | "phone"> | null;
 };
 
-export async function getFirstActiveStore(): Promise<Store | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("stores")
-    .select("*")
-    .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`get_first_active_store_failed: ${error.message}`);
-  }
-
-  return data;
-}
-
 export async function listMembershipsByStore(
-  store_id: string,
+  storeId: string,
 ): Promise<Membership[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("memberships")
     .select("*")
-    .eq("store_id", store_id)
+    .eq("store_id", storeId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -46,26 +28,55 @@ export async function listMembershipsByStore(
 }
 
 export async function listMembershipsWithUsersByStore(
-  store_id: string,
+  storeId: string,
 ): Promise<MembershipWithUser[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("memberships")
-    .select("*, users(display_name, phone)")
-    .eq("store_id", store_id)
-    .order("created_at", { ascending: false });
+    .select("*")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: true });
 
-  if (error) {
+  if (membershipError) {
     throw new Error(
-      `list_memberships_with_users_by_store_failed: ${error.message}`,
+      `list_memberships_with_users_by_store_failed: ${membershipError.message}`,
     );
   }
 
-  return (data ?? []) as MembershipWithUser[];
+  const membershipRows = (memberships ?? []) as Membership[];
+  const userIds = Array.from(
+    new Set(membershipRows.map((membership) => membership.user_id)),
+  );
+
+  if (userIds.length === 0) {
+    return [];
+  }
+
+  const { data: users, error: userError } = await supabase
+    .from("users")
+    .select("id, display_name, phone")
+    .in("id", userIds);
+
+  if (userError) {
+    throw new Error(
+      `list_memberships_with_users_by_store_failed: ${userError.message}`,
+    );
+  }
+
+  const usersById = new Map(
+    ((users ?? []) as Pick<User, "id" | "display_name" | "phone">[]).map(
+      (user) => [user.id, user],
+    ),
+  );
+
+  return membershipRows.map((membership) => ({
+    ...membership,
+    users: usersById.get(membership.user_id) ?? null,
+  }));
 }
 
 export async function getInactiveMembers7Days(
-  store_id: string,
+  storeId: string,
 ): Promise<Membership[]> {
   const supabase = await createClient();
   const sevenDaysAgo = new Date();
@@ -74,7 +85,7 @@ export async function getInactiveMembers7Days(
   const { data, error } = await supabase
     .from("memberships")
     .select("*")
-    .eq("store_id", store_id)
+    .eq("store_id", storeId)
     .or(`last_visit_at.is.null,last_visit_at.lt.${sevenDaysAgo.toISOString()}`)
     .order("last_visit_at", { ascending: true, nullsFirst: true });
 
@@ -103,7 +114,7 @@ export async function createMembership(
 }
 
 export async function updateMembershipVisitStats(
-  membership_id: string,
+  membershipId: string,
   input: Pick<
     MembershipUpdate,
     "visit_count" | "game_count" | "last_visit_at" | "updated_at"
@@ -113,7 +124,7 @@ export async function updateMembershipVisitStats(
   const { data, error } = await supabase
     .from("memberships")
     .update(input)
-    .eq("id", membership_id)
+    .eq("id", membershipId)
     .select("*")
     .single();
 
