@@ -14,6 +14,18 @@ export type ReservationWithDetails = Reservation & {
   user: Pick<User, "display_name"> | null;
 };
 
+export type ReservationDraftInput = {
+  circle_id: string | null;
+  end_time: string;
+  reservation_date: string;
+  room_id: string;
+  start_time: string;
+  store_id: string;
+  user_id: string;
+};
+
+export type ReservationDraftUser = Pick<User, "display_name" | "id">;
+
 export async function listReservationsByStore(
   store_id: string,
 ): Promise<Reservation[]> {
@@ -30,6 +42,23 @@ export async function listReservationsByStore(
   }
 
   return data ?? [];
+}
+
+export async function listReservationDraftUsers(): Promise<
+  ReservationDraftUser[]
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, display_name")
+    .eq("status", "active")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`list_reservation_draft_users_failed: ${error.message}`);
+  }
+
+  return (data ?? []) as ReservationDraftUser[];
 }
 
 export async function listReservationsWithDetailsByStore(
@@ -140,6 +169,33 @@ export async function createReservation(
 
   if (error) {
     throw new Error(`create_reservation_failed: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function createReservationDraft(
+  input: ReservationDraftInput,
+): Promise<Reservation> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("reservations")
+    .insert({
+      circle_id: input.circle_id,
+      end_time: input.end_time,
+      reservation_date: input.reservation_date,
+      room_id: input.room_id,
+      source: "player",
+      start_time: input.start_time,
+      status: "pending",
+      store_id: input.store_id,
+      user_id: input.user_id,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`create_reservation_draft_failed: ${error.message}`);
   }
 
   return data;

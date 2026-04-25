@@ -1,12 +1,17 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { createReservationDraftAction } from "@/app/player/reservations/new/actions";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listCirclesWithMembersByStore,
   type CircleWithDetails,
 } from "@/lib/services/circle_service";
 import { listRoomsByStore } from "@/lib/services/room_service";
+import {
+  listReservationDraftUsers,
+  type ReservationDraftUser,
+} from "@/lib/services/reservation_service";
 import type { Room } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +19,9 @@ export const dynamic = "force-dynamic";
 type ReservationPageData = {
   circles: CircleWithDetails[];
   rooms: Room[];
+  store_id: string;
   store_name: string;
+  users: ReservationDraftUser[];
 };
 
 type Metric = {
@@ -25,9 +32,17 @@ type Metric = {
 
 const recommendedDates = ["今天", "明天", "周末"];
 const recommendedTimeSlots = ["14:00-17:00", "19:00-22:00", "22:00-24:00"];
+const timeOptions = ["14:00", "17:00", "19:00", "22:00", "24:00"];
 
-export default async function NewReservationPage() {
+type NewReservationPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function NewReservationPage({
+  searchParams,
+}: NewReservationPageProps) {
   const pageData = await loadReservationPageData();
+  const resolvedSearchParams = searchParams ? await searchParams : {};
 
   if (pageData.status === "empty") {
     return <ReservationShell>{renderNoStoreState()}</ReservationShell>;
@@ -35,6 +50,14 @@ export default async function NewReservationPage() {
 
   const metrics = buildMetrics(pageData.data);
   const tips = buildTips(pageData.data.rooms, pageData.data.circles);
+  const successMessage = getSearchParam(resolvedSearchParams, "created");
+  const errorMessage = getSearchParam(resolvedSearchParams, "error");
+  const createdReservation = {
+    end_time: getSearchParam(resolvedSearchParams, "end_time"),
+    reservation_date: getSearchParam(resolvedSearchParams, "reservation_date"),
+    start_time: getSearchParam(resolvedSearchParams, "start_time"),
+    status: getSearchParam(resolvedSearchParams, "status"),
+  };
 
   return (
     <ReservationShell>
@@ -47,6 +70,9 @@ export default async function NewReservationPage() {
         </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
+        </p>
+        <p className="mt-3 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
+          当前仅创建门店预约草稿，不涉及任何资金处理。
         </p>
       </header>
 
@@ -83,6 +109,139 @@ export default async function NewReservationPage() {
 
       <PickerSection items={recommendedDates} title="推荐预约日期" />
       <PickerSection items={recommendedTimeSlots} title="推荐时段" />
+
+      {successMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">
+            预约草稿已创建
+          </p>
+          <div className="mt-4 grid gap-3 text-sm leading-7 text-[#4d665e] sm:grid-cols-2">
+            <p>预约日期：{createdReservation.reservation_date ?? "未返回"}</p>
+            <p>开始时间：{createdReservation.start_time ?? "未返回"}</p>
+            <p>结束时间：{createdReservation.end_time ?? "未返回"}</p>
+            <p>状态：{createdReservation.status ?? "未返回"}</p>
+          </div>
+        </section>
+      ) : null}
+
+      {errorMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            {errorMessage}
+          </p>
+        </section>
+      ) : null}
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">创建预约草稿</p>
+        <form action={createReservationDraftAction} className="mt-5 grid gap-4">
+          <input name="store_id" type="hidden" value={pageData.data.store_id} />
+
+          <label className="grid gap-2 text-sm font-semibold">
+            预约人
+            <select
+              className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+              name="user_id"
+              required
+            >
+              <option value="">请选择预约人</option>
+              {pageData.data.users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.display_name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold">
+            包厢
+            <select
+              className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+              name="room_id"
+              required
+            >
+              <option value="">请选择包厢</option>
+              {pageData.data.rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold">
+            熟人圈（可选）
+            <select
+              className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+              name="circle_id"
+            >
+              <option value="">不选择熟人圈</option>
+              {pageData.data.circles.map((circle) => (
+                <option key={circle.id} value={circle.id}>
+                  {circle.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="grid gap-2 text-sm font-semibold">
+              预约日期
+              <input
+                className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+                defaultValue={getTodayDateString()}
+                name="reservation_date"
+                required
+                type="date"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-semibold">
+              开始时间
+              <select
+                className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+                defaultValue="19:00"
+                name="start_time"
+                required
+              >
+                {timeOptions.map((timeOption) => (
+                  <option key={timeOption} value={timeOption}>
+                    {timeOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm font-semibold">
+              结束时间
+              <select
+                className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+                defaultValue="22:00"
+                name="end_time"
+                required
+              >
+                {timeOptions.map((timeOption) => (
+                  <option key={timeOption} value={timeOption}>
+                    {timeOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <button
+            className="rounded-full bg-[#d3a443] px-5 py-3 text-sm font-semibold text-[#12332a] disabled:opacity-50"
+            disabled={
+              pageData.data.rooms.length === 0 ||
+              pageData.data.users.length === 0
+            }
+            type="submit"
+          >
+            创建预约草稿
+          </button>
+        </form>
+      </section>
 
       <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
         <div className="flex items-end justify-between gap-4">
@@ -167,19 +326,13 @@ export default async function NewReservationPage() {
       </section>
 
       <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
-        <p className="text-sm font-semibold text-[#9b7428]">预约草稿</p>
+        <p className="text-sm font-semibold text-[#9b7428]">预约草稿说明</p>
         <div className="mt-4 space-y-2 leading-7 text-[#4d665e]">
           <p>门店：{pageData.data.store_name}</p>
           <p>日期：今天</p>
           <p>时段：19:00-22:00</p>
-          <p>包厢和圈子可从上方列表中选择。</p>
+          <p>包厢、圈子和预约人可从表单中选择。</p>
         </div>
-        <button
-          className="mt-5 w-full rounded-full bg-[#d3a443] px-5 py-3 text-sm font-semibold text-[#12332a]"
-          type="button"
-        >
-          生成预约草稿
-        </button>
       </section>
     </ReservationShell>
   );
@@ -195,9 +348,10 @@ async function loadReservationPageData(): Promise<
     return { status: "empty" };
   }
 
-  const [rooms, circles] = await Promise.all([
+  const [rooms, circles, users] = await Promise.all([
     listRoomsByStore(store.id),
     listCirclesWithMembersByStore(store.id),
+    listReservationDraftUsers(),
   ]);
   const activeRooms = rooms.filter((room) => room.status === "active");
 
@@ -205,7 +359,9 @@ async function loadReservationPageData(): Promise<
     data: {
       circles,
       rooms: activeRooms,
+      store_id: store.id,
       store_name: store.name,
+      users,
     },
     status: "ready",
   };
@@ -215,6 +371,7 @@ function buildMetrics(data: ReservationPageData): Metric[] {
   return [
     { label: "可预约包厢数量", suffix: "间", value: data.rooms.length },
     { label: "熟人圈数量", suffix: "个", value: data.circles.length },
+    { label: "可选预约人", suffix: "人", value: data.users.length },
   ];
 }
 
@@ -245,6 +402,25 @@ function buildTips(rooms: Room[], circles: CircleWithDetails[]): string[] {
   }
 
   return tips;
+}
+
+function getSearchParam(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+): string | null {
+  const value = searchParams[key];
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+function getTodayDateString(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+  }).format(new Date());
 }
 
 type PickerSectionProps = {
