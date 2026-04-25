@@ -1,91 +1,136 @@
-import { createSupabaseServerClient as createClient } from "@/lib/supabase/server";
-import type {
-  Game,
-  GameInsert,
-  GameParticipant,
-  GameParticipantInsert,
-  GameResult,
-  GameResultInsert,
-  GameStatus,
-} from "@/types/domain";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export async function createGame(input: GameInsert): Promise<Game> {
-  const supabase = await createClient();
+export type GameDraftStatus =
+  | "created"
+  | "waiting_players"
+  | "playing"
+  | "result_pending"
+  | "completed"
+  | "card_generated"
+  | "shared"
+  | "archived";
+
+export type GameDraft = {
+  id: string;
+  created_at: string;
+  store_id: string;
+  game_count: number;
+  status: GameDraftStatus;
+};
+
+export type CreateGameDraftInput = {
+  storeId?: string;
+  gameCount?: number;
+};
+
+export type CreateGameDraftResult =
+  | {
+      ok: true;
+      game: GameDraft;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+function normalizeGameCount(value: number | undefined): number {
+  if (!Number.isInteger(value) || value === undefined || value <= 0) {
+    return 1;
+  }
+
+  return value;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+async function resolveStoreId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  storeId?: string,
+): Promise<string | null> {
+  const trimmedStoreId = storeId?.trim();
+
+  if (trimmedStoreId) {
+    return trimmedStoreId;
+  }
+
+  const { data, error } = await supabase
+    .from("stores")
+    .select("id")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data?.id ?? null;
+}
+
+export async function createGameDraft(
+  input: CreateGameDraftInput,
+): Promise<CreateGameDraftResult> {
+  try {
+    const supabase = await createSupabaseServerClient();
+
+    const storeId = await resolveStoreId(supabase, input.storeId);
+
+    if (!storeId) {
+      return {
+        ok: false,
+        error: "无法创建牌局草稿：缺少 store_id，且 stores 表中没有可用门店。",
+      };
+    }
+
+    const gameCount = normalizeGameCount(input.gameCount);
+
+    const { data, error } = await supabase
+      .from("games")
+      .insert({
+        store_id: storeId,
+        game_count: gameCount,
+        status: "created",
+      })
+      .select("id, created_at, store_id, game_count, status")
+      .single();
+
+    if (error) {
+      return {
+        ok: false,
+        error: error.message,
+      };
+    }
+
+    return {
+      ok: true,
+      game: data as GameDraft,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: getErrorMessage(error),
+    };
+  }
+}
+
+export async function listRecentGameDrafts(): Promise<GameDraft[]> {
+  const supabase = await createSupabaseServerClient();
+
   const { data, error } = await supabase
     .from("games")
-    .insert(input)
-    .select("*")
-    .single();
+    .select("id, created_at, store_id, game_count, status")
+    .order("created_at", { ascending: false })
+    .limit(10);
 
   if (error) {
-    throw new Error(`create_game_failed: ${error.message}`);
+    throw new Error(error.message);
   }
 
-  return data;
-}
-
-export async function listGamesByStore(store_id: string): Promise<Game[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("games")
-    .select("*")
-    .eq("store_id", store_id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(`list_games_by_store_failed: ${error.message}`);
-  }
-
-  return data ?? [];
-}
-
-export async function addGameParticipants(
-  participants: GameParticipantInsert[],
-): Promise<GameParticipant[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("game_participants")
-    .insert(participants)
-    .select("*");
-
-  if (error) {
-    throw new Error(`add_game_participants_failed: ${error.message}`);
-  }
-
-  return data ?? [];
-}
-
-export async function saveGameResults(
-  results: GameResultInsert[],
-): Promise<GameResult[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("game_results")
-    .insert(results)
-    .select("*");
-
-  if (error) {
-    throw new Error(`save_game_results_failed: ${error.message}`);
-  }
-
-  return data ?? [];
-}
-
-export async function updateGameStatus(
-  game_id: string,
-  status: GameStatus,
-): Promise<Game> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("games")
-    .update({ status })
-    .eq("id", game_id)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(`update_game_status_failed: ${error.message}`);
-  }
-
-  return data;
+  return (data ?? []) as GameDraft[];
 }
