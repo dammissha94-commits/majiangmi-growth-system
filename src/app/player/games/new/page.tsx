@@ -1,13 +1,17 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { createGameDraftAction } from "@/app/player/games/new/actions";
+import {
+  addFourParticipantsAction,
+  createGameDraftAction,
+} from "@/app/player/games/new/actions";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listCirclesWithMembersByStore,
   type CircleWithDetails,
 } from "@/lib/services/circle_service";
 import {
+  getLatestGameDraftByStore,
   listRecentGameDrafts,
 } from "@/lib/services/game_service";
 import {
@@ -21,6 +25,7 @@ export const dynamic = "force-dynamic";
 
 type GamePageData = {
   circles: CircleWithDetails[];
+  latest_game_draft: Game | null;
   recent_games: Game[];
   reservations: ReservationWithDetails[];
   rooms: Room[];
@@ -59,6 +64,15 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
   const sortedRooms = sortRecommendedRooms(pageData.data.rooms);
   const successMessage = getSearchParam(resolvedSearchParams, "created");
   const errorMessage = getSearchParam(resolvedSearchParams, "error");
+  const participantErrorMessage = getSearchParam(
+    resolvedSearchParams,
+    "participant_error",
+  );
+  const participantStatus = getSearchParam(
+    resolvedSearchParams,
+    "participant_status",
+  );
+  const participantRows = buildParticipantRows(resolvedSearchParams);
   const createdGame = {
     circle_id: getSearchParam(resolvedSearchParams, "circle_id"),
     game_count: getSearchParam(resolvedSearchParams, "game_count"),
@@ -76,6 +90,9 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         <p className="mt-3 text-xl font-semibold">{pageData.data.store_name}</p>
         <p className="mt-3 leading-7 text-[#e8dbc4]">
           当前仅创建牌局草稿，不会保存娱乐积分结果。
+        </p>
+        <p className="mt-3 leading-7 text-[#e8dbc4]">
+          当前步骤只添加参与玩家，不会保存娱乐积分结果。
         </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
@@ -115,11 +132,48 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         </section>
       ) : null}
 
+      {participantStatus ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">
+            {participantStatus === "already_exists"
+              ? "该牌局已添加参与玩家"
+              : "4名参与玩家已添加"}
+          </p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            game_id：{getSearchParam(resolvedSearchParams, "game_id") ?? "未返回"}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {participantRows.map((participant) => (
+              <div
+                className="rounded-2xl bg-[#f7f1e6] p-4"
+                key={participant.seat_no}
+              >
+                <p className="text-sm text-[#5d756d]">
+                  seat_no {participant.seat_no}
+                </p>
+                <p className="mt-2 text-xl font-semibold">
+                  {participant.display_name}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {errorMessage ? (
         <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
           <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
           <p className="mt-3 text-sm leading-7 text-[#4d665e]">
             {errorMessage}
+          </p>
+        </section>
+      ) : null}
+
+      {participantErrorMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">添加失败</p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            {participantErrorMessage}
           </p>
         </section>
       ) : null}
@@ -182,6 +236,45 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
             创建牌局草稿
           </button>
         </form>
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">
+          待添加参与玩家的牌局草稿
+        </p>
+        {pageData.data.latest_game_draft ? (
+          <div className="mt-4 grid gap-4">
+            <div className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+              <p>game_id：{pageData.data.latest_game_draft.id}</p>
+              <p>status：{pageData.data.latest_game_draft.status}</p>
+              <p>circle_id：{pageData.data.latest_game_draft.circle_id ?? "未绑定"}</p>
+              <p>room_id：{pageData.data.latest_game_draft.room_id ?? "未选择"}</p>
+            </div>
+
+            {!pageData.data.latest_game_draft.circle_id ? (
+              <p className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+                当前牌局没有绑定熟人圈，无法自动添加参与玩家
+              </p>
+            ) : null}
+
+            <form action={addFourParticipantsAction}>
+              <input
+                name="game_id"
+                type="hidden"
+                value={pageData.data.latest_game_draft.id}
+              />
+              <button
+                className="w-full rounded-full bg-[#d3a443] px-5 py-3 text-sm font-semibold text-[#12332a] disabled:opacity-50"
+                disabled={!pageData.data.latest_game_draft.circle_id}
+                type="submit"
+              >
+                添加4名参与玩家
+              </button>
+            </form>
+          </div>
+        ) : (
+          <EmptyLine>暂无可添加参与玩家的牌局草稿。</EmptyLine>
+        )}
       </section>
 
       <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
@@ -293,17 +386,20 @@ async function loadGamePageData(): Promise<
     return { status: "empty" };
   }
 
-  const [rooms, circles, reservations, recentGames] = await Promise.all([
+  const [rooms, circles, reservations, recentGames, latestGameDraft] =
+    await Promise.all([
     listRoomsByStore(store.id),
     listCirclesWithMembersByStore(store.id),
     listReservationsWithDetailsByStore(store.id),
     listRecentGameDrafts(store.id),
+    getLatestGameDraftByStore(store.id),
   ]);
   const activeRooms = rooms.filter((room) => room.status === "active");
 
   return {
     data: {
       circles,
+      latest_game_draft: latestGameDraft,
       recent_games: recentGames,
       reservations,
       rooms: activeRooms,
@@ -321,6 +417,25 @@ function buildMetrics(data: GamePageData): Metric[] {
     { label: "可选预约记录", suffix: "条", value: data.reservations.length },
     { label: "草稿数量", suffix: "条", value: data.recent_games.length },
   ];
+}
+
+type ParticipantResultRow = {
+  display_name: string;
+  seat_no: number;
+};
+
+function buildParticipantRows(
+  searchParams: Record<string, string | string[] | undefined>,
+): ParticipantResultRow[] {
+  return [1, 2, 3, 4].flatMap((seatNo) => {
+    const displayName = getSearchParam(searchParams, `seat_${seatNo}`);
+
+    if (!displayName) {
+      return [];
+    }
+
+    return [{ display_name: displayName, seat_no: seatNo }];
+  });
 }
 
 function sortRecommendedCircles(

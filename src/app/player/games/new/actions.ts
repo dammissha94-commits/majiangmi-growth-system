@@ -2,7 +2,10 @@
 
 import { redirect } from "next/navigation";
 
-import { createGameDraft } from "@/lib/services/game_service";
+import {
+  addFourParticipantsFromCircle,
+  createGameDraft,
+} from "@/lib/services/game_service";
 
 export async function createGameDraftAction(formData: FormData): Promise<void> {
   let createdGame: Awaited<ReturnType<typeof createGameDraft>>;
@@ -32,6 +35,35 @@ export async function createGameDraftAction(formData: FormData): Promise<void> {
       createdGame.circle_id ?? "null",
     )}&reservation_id=${encodeURIComponent(createdGame.reservation_id ?? "null")}`,
   );
+}
+
+export async function addFourParticipantsAction(
+  formData: FormData,
+): Promise<void> {
+  let result: Awaited<ReturnType<typeof addFourParticipantsFromCircle>>;
+
+  try {
+    result = await addFourParticipantsFromCircle(
+      getRequiredFormValue(formData, "game_id"),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown_error";
+    redirect(`/player/games/new?participant_error=${encodeURIComponent(message)}`);
+  }
+
+  const searchParams = new URLSearchParams({
+    game_id: result.game_id,
+    participant_status: result.status,
+  });
+
+  result.participants.slice(0, 4).forEach((participant) => {
+    searchParams.set(
+      `seat_${participant.seat_no}`,
+      participant.user?.display_name ?? "未命名用户",
+    );
+  });
+
+  redirect(`/player/games/new?${searchParams.toString()}`);
 }
 
 function getRequiredFormValue(formData: FormData, key: string): string {
