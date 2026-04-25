@@ -3,7 +3,30 @@ import type {
   Membership,
   MembershipInsert,
   MembershipUpdate,
+  Store,
+  User,
 } from "@/types/domain";
+
+export type MembershipWithUser = Membership & {
+  users: Pick<User, "display_name" | "phone"> | null;
+};
+
+export async function getFirstActiveStore(): Promise<Store | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stores")
+    .select("*")
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`get_first_active_store_failed: ${error.message}`);
+  }
+
+  return data;
+}
 
 export async function listMembershipsByStore(
   store_id: string,
@@ -20,6 +43,25 @@ export async function listMembershipsByStore(
   }
 
   return data ?? [];
+}
+
+export async function listMembershipsWithUsersByStore(
+  store_id: string,
+): Promise<MembershipWithUser[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("memberships")
+    .select("*, users(display_name, phone)")
+    .eq("store_id", store_id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(
+      `list_memberships_with_users_by_store_failed: ${error.message}`,
+    );
+  }
+
+  return (data ?? []) as MembershipWithUser[];
 }
 
 export async function getInactiveMembers7Days(
