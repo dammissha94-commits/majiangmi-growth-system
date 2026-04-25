@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   addFourParticipantsAction,
   createGameDraftAction,
+  saveEntertainmentResultsAction,
 } from "@/app/player/games/new/actions";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
@@ -12,6 +13,8 @@ import {
 } from "@/lib/services/circle_service";
 import {
   getLatestGameDraftByStore,
+  getLatestGameReadyForResultsByStore,
+  type GameReadyForResults,
   listRecentGameDrafts,
 } from "@/lib/services/game_service";
 import {
@@ -26,6 +29,7 @@ export const dynamic = "force-dynamic";
 type GamePageData = {
   circles: CircleWithDetails[];
   latest_game_draft: Game | null;
+  latest_game_ready_for_results: GameReadyForResults | null;
   recent_games: Game[];
   reservations: ReservationWithDetails[];
   rooms: Room[];
@@ -51,6 +55,13 @@ const steps = [
   "后续添加参与玩家",
 ];
 
+const defaultScores: Record<number, number> = {
+  1: 86,
+  2: 42,
+  3: -18,
+  4: -35,
+};
+
 export default async function NewGamePage({ searchParams }: NewGamePageProps) {
   const pageData = await loadGamePageData();
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -72,7 +83,11 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
     resolvedSearchParams,
     "participant_status",
   );
+  const resultErrorMessage = getSearchParam(resolvedSearchParams, "result_error");
+  const resultStatus = getSearchParam(resolvedSearchParams, "result_status");
   const participantRows = buildParticipantRows(resolvedSearchParams);
+  const resultRows = buildResultRows(resolvedSearchParams);
+  const mvpPlayer = getSearchParam(resolvedSearchParams, "mvp_player");
   const createdGame = {
     circle_id: getSearchParam(resolvedSearchParams, "circle_id"),
     game_count: getSearchParam(resolvedSearchParams, "game_count"),
@@ -93,6 +108,9 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         </p>
         <p className="mt-3 leading-7 text-[#e8dbc4]">
           当前步骤只添加参与玩家，不会保存娱乐积分结果。
+        </p>
+        <p className="mt-3 leading-7 text-[#e8dbc4]">
+          当前步骤只保存娱乐积分结果，不会生成战绩海报。
         </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
@@ -160,6 +178,38 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         </section>
       ) : null}
 
+      {resultStatus ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">
+            {resultStatus === "already_exists"
+              ? "该牌局已保存娱乐积分结果"
+              : "娱乐积分结果已保存"}
+          </p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            game_id：{getSearchParam(resolvedSearchParams, "game_id") ?? "未返回"}
+          </p>
+          <p className="mt-2 text-sm leading-7 text-[#4d665e]">
+            MVP 玩家：{mvpPlayer ?? "暂无"}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {resultRows.map((result) => (
+              <div
+                className="rounded-2xl bg-[#f7f1e6] p-4"
+                key={result.rank}
+              >
+                <p className="text-sm text-[#5d756d]">
+                  {result.display_name}
+                </p>
+                <p className="mt-2 text-lg font-semibold">rank {result.rank}</p>
+                <p className="mt-2 text-sm text-[#5d756d]">
+                  entertainment_score：{result.entertainment_score}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {errorMessage ? (
         <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
           <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
@@ -174,6 +224,15 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
           <p className="text-sm font-semibold text-[#9b7428]">添加失败</p>
           <p className="mt-3 text-sm leading-7 text-[#4d665e]">
             {participantErrorMessage}
+          </p>
+        </section>
+      ) : null}
+
+      {resultErrorMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">保存失败</p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            {resultErrorMessage}
           </p>
         </section>
       ) : null}
@@ -274,6 +333,113 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
           </div>
         ) : (
           <EmptyLine>暂无可添加参与玩家的牌局草稿。</EmptyLine>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">
+          待保存娱乐积分结果的牌局
+        </p>
+        {pageData.data.latest_game_ready_for_results ? (
+          <form action={saveEntertainmentResultsAction} className="mt-5 grid gap-4">
+            <input
+              name="game_id"
+              type="hidden"
+              value={pageData.data.latest_game_ready_for_results.game.id}
+            />
+            <div className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+              <p>
+                game_id：{pageData.data.latest_game_ready_for_results.game.id}
+              </p>
+              <p>
+                status：{pageData.data.latest_game_ready_for_results.game.status}
+              </p>
+            </div>
+
+            <div className="grid gap-4">
+              {pageData.data.latest_game_ready_for_results.participants.map(
+                (participant) => (
+                  <article
+                    className="rounded-2xl bg-[#f7f1e6] p-4"
+                    key={participant.id}
+                  >
+                    <input
+                      name={`participant_id_${participant.seat_no}`}
+                      type="hidden"
+                      value={participant.id}
+                    />
+                    <input
+                      name={`user_id_${participant.seat_no}`}
+                      type="hidden"
+                      value={participant.user_id}
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm text-[#5d756d]">
+                          seat_no {participant.seat_no}
+                        </p>
+                        <h3 className="mt-1 text-xl font-semibold">
+                          {participant.user?.display_name ?? "未命名用户"}
+                        </h3>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm font-semibold">
+                        <input
+                          defaultChecked={participant.seat_no === 1}
+                          name="mvp_seat"
+                          type="radio"
+                          value={participant.seat_no}
+                        />
+                        MVP
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <label className="grid gap-2 text-sm font-semibold">
+                        rank
+                        <input
+                          className="rounded-2xl border border-[#e1cfaa] bg-[#fff8ea] px-4 py-3 text-sm font-medium"
+                          defaultValue={participant.seat_no}
+                          max="4"
+                          min="1"
+                          name={`rank_${participant.seat_no}`}
+                          required
+                          type="number"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-semibold">
+                        entertainment_score
+                        <input
+                          className="rounded-2xl border border-[#e1cfaa] bg-[#fff8ea] px-4 py-3 text-sm font-medium"
+                          defaultValue={defaultScores[participant.seat_no] ?? 0}
+                          name={`entertainment_score_${participant.seat_no}`}
+                          required
+                          type="number"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-semibold">
+                        note（可选）
+                        <input
+                          className="rounded-2xl border border-[#e1cfaa] bg-[#fff8ea] px-4 py-3 text-sm font-medium"
+                          name={`note_${participant.seat_no}`}
+                          placeholder="休闲记录备注"
+                          type="text"
+                        />
+                      </label>
+                    </div>
+                  </article>
+                ),
+              )}
+            </div>
+
+            <button
+              className="rounded-full bg-[#d3a443] px-5 py-3 text-sm font-semibold text-[#12332a]"
+              type="submit"
+            >
+              保存娱乐积分结果
+            </button>
+          </form>
+        ) : (
+          <EmptyLine>暂无可保存娱乐积分结果的牌局。</EmptyLine>
         )}
       </section>
 
@@ -386,13 +552,20 @@ async function loadGamePageData(): Promise<
     return { status: "empty" };
   }
 
-  const [rooms, circles, reservations, recentGames, latestGameDraft] =
-    await Promise.all([
+  const [
+    rooms,
+    circles,
+    reservations,
+    recentGames,
+    latestGameDraft,
+    latestGameReadyForResults,
+  ] = await Promise.all([
     listRoomsByStore(store.id),
     listCirclesWithMembersByStore(store.id),
     listReservationsWithDetailsByStore(store.id),
     listRecentGameDrafts(store.id),
     getLatestGameDraftByStore(store.id),
+    getLatestGameReadyForResultsByStore(store.id),
   ]);
   const activeRooms = rooms.filter((room) => room.status === "active");
 
@@ -400,6 +573,7 @@ async function loadGamePageData(): Promise<
     data: {
       circles,
       latest_game_draft: latestGameDraft,
+      latest_game_ready_for_results: latestGameReadyForResults,
       recent_games: recentGames,
       reservations,
       rooms: activeRooms,
@@ -424,6 +598,12 @@ type ParticipantResultRow = {
   seat_no: number;
 };
 
+type EntertainmentResultRow = {
+  display_name: string;
+  entertainment_score: string;
+  rank: string;
+};
+
 function buildParticipantRows(
   searchParams: Record<string, string | string[] | undefined>,
 ): ParticipantResultRow[] {
@@ -435,6 +615,31 @@ function buildParticipantRows(
     }
 
     return [{ display_name: displayName, seat_no: seatNo }];
+  });
+}
+
+function buildResultRows(
+  searchParams: Record<string, string | string[] | undefined>,
+): EntertainmentResultRow[] {
+  return [1, 2, 3, 4].flatMap((rowNumber) => {
+    const displayName = getSearchParam(searchParams, `result_player_${rowNumber}`);
+    const rank = getSearchParam(searchParams, `result_rank_${rowNumber}`);
+    const entertainmentScore = getSearchParam(
+      searchParams,
+      `result_score_${rowNumber}`,
+    );
+
+    if (!displayName || !rank || !entertainmentScore) {
+      return [];
+    }
+
+    return [
+      {
+        display_name: displayName,
+        entertainment_score: entertainmentScore,
+        rank,
+      },
+    ];
   });
 }
 

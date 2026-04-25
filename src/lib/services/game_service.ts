@@ -28,6 +28,35 @@ export type AddFourParticipantsResult = {
   status: "already_exists" | "created";
 };
 
+export type GameReadyForResults = {
+  game: Game;
+  participants: GameParticipantWithUser[];
+};
+
+export type EntertainmentResultInput = {
+  entertainment_score: number;
+  is_mvp: boolean;
+  note: string | null;
+  participant_id: string;
+  rank: number;
+  user_id: string;
+};
+
+export type SaveEntertainmentResultsInput = {
+  game_id: string;
+  results: EntertainmentResultInput[];
+};
+
+export type GameResultWithUser = GameResult & {
+  user: Pick<User, "display_name"> | null;
+};
+
+export type SaveEntertainmentResultsResult = {
+  game_id: string;
+  results: GameResultWithUser[];
+  status: "already_exists" | "created";
+};
+
 export async function createGame(input: GameInsert): Promise<Game> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -123,6 +152,59 @@ export async function getLatestGameDraftByStore(
   return data;
 }
 
+export async function getLatestGameReadyForResultsByStore(
+  store_id: string,
+): Promise<GameReadyForResults | null> {
+  const supabase = await createClient();
+  const { data: games, error: gameError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("store_id", store_id)
+    .in("status", ["created", "waiting_players"])
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (gameError) {
+    throw new Error(
+      `get_latest_game_ready_for_results_by_store_failed: ${gameError.message}`,
+    );
+  }
+
+  const gameRows = (games ?? []) as Game[];
+
+  for (const game of gameRows) {
+    const participants = await listGameParticipantsWithUsers(
+      game.id,
+      "get_latest_game_ready_for_results_by_store_failed",
+    );
+
+    if (participants.length !== 4) {
+      continue;
+    }
+
+    const { data: results, error: resultError } = await supabase
+      .from("game_results")
+      .select("id")
+      .eq("game_id", game.id)
+      .limit(1);
+
+    if (resultError) {
+      throw new Error(
+        `get_latest_game_ready_for_results_by_store_failed: ${resultError.message}`,
+      );
+    }
+
+    if ((results ?? []).length === 0) {
+      return {
+        game,
+        participants,
+      };
+    }
+  }
+
+  return null;
+}
+
 export async function addFourParticipantsFromCircle(
   game_id: string,
 ): Promise<AddFourParticipantsResult> {
@@ -151,7 +233,10 @@ export async function addFourParticipantsFromCircle(
     );
   }
 
-  const existingParticipants = await listGameParticipantsWithUsers(game_id);
+  const existingParticipants = await listGameParticipantsWithUsers(
+    game_id,
+    "add_four_participants_from_circle_failed",
+  );
 
   if (existingParticipants.length > 0) {
     return {
@@ -201,7 +286,10 @@ export async function addFourParticipantsFromCircle(
 
   return {
     game_id,
-    participants: await listGameParticipantsWithUsers(game_id),
+    participants: await listGameParticipantsWithUsers(
+      game_id,
+      "add_four_participants_from_circle_failed",
+    ),
     status: "created",
   };
 }
@@ -238,6 +326,62 @@ export async function saveGameResults(
   return data ?? [];
 }
 
+export async function saveEntertainmentResults(
+  input: SaveEntertainmentResultsInput,
+): Promise<SaveEntertainmentResultsResult> {
+  const existingResults = await listGameResultsWithUsers(
+    input.game_id,
+    "save_entertainment_results_failed",
+  );
+
+  if (existingResults.length > 0) {
+    return {
+      game_id: input.game_id,
+      results: existingResults,
+      status: "already_exists",
+    };
+  }
+
+  if (input.results.length !== 4) {
+    throw new Error("save_entertainment_results_failed: four_results_required");
+  }
+
+  const supabase = await createClient();
+  const { error: resultError } = await supabase.from("game_results").insert(
+    input.results.map((result) => ({
+      entertainment_score: result.entertainment_score,
+      game_id: input.game_id,
+      is_mvp: result.is_mvp,
+      note: result.note,
+      participant_id: result.participant_id,
+      rank: result.rank,
+      user_id: result.user_id,
+    })),
+  );
+
+  if (resultError) {
+    throw new Error(`save_entertainment_results_failed: ${resultError.message}`);
+  }
+
+  const { error: gameError } = await supabase
+    .from("games")
+    .update({ status: "completed" })
+    .eq("id", input.game_id);
+
+  if (gameError) {
+    throw new Error(`save_entertainment_results_failed: ${gameError.message}`);
+  }
+
+  return {
+    game_id: input.game_id,
+    results: await listGameResultsWithUsers(
+      input.game_id,
+      "save_entertainment_results_failed",
+    ),
+    status: "created",
+  };
+}
+
 export async function updateGameStatus(
   game_id: string,
   status: GameStatus,
@@ -259,6 +403,7 @@ export async function updateGameStatus(
 
 async function listGameParticipantsWithUsers(
   game_id: string,
+  errorPrefix = "add_four_participants_from_circle_failed",
 ): Promise<GameParticipantWithUser[]> {
   const supabase = await createClient();
   const { data: participants, error: participantError } = await supabase
@@ -268,9 +413,7 @@ async function listGameParticipantsWithUsers(
     .order("seat_no", { ascending: true });
 
   if (participantError) {
-    throw new Error(
-      `add_four_participants_from_circle_failed: ${participantError.message}`,
-    );
+    throw new Error(`${errorPrefix}: ${participantError.message}`);
   }
 
   const participantRows = (participants ?? []) as GameParticipant[];
@@ -288,9 +431,7 @@ async function listGameParticipantsWithUsers(
     .in("id", userIds);
 
   if (userError) {
-    throw new Error(
-      `add_four_participants_from_circle_failed: ${userError.message}`,
-    );
+    throw new Error(`${errorPrefix}: ${userError.message}`);
   }
 
   const usersById = new Map(
@@ -303,5 +444,51 @@ async function listGameParticipantsWithUsers(
   return participantRows.map((participant) => ({
     ...participant,
     user: usersById.get(participant.user_id) ?? null,
+  }));
+}
+
+async function listGameResultsWithUsers(
+  game_id: string,
+  errorPrefix: string,
+): Promise<GameResultWithUser[]> {
+  const supabase = await createClient();
+  const { data: results, error: resultError } = await supabase
+    .from("game_results")
+    .select("*")
+    .eq("game_id", game_id)
+    .order("rank", { ascending: true });
+
+  if (resultError) {
+    throw new Error(`${errorPrefix}: ${resultError.message}`);
+  }
+
+  const resultRows = (results ?? []) as GameResult[];
+
+  if (resultRows.length === 0) {
+    return [];
+  }
+
+  const userIds = Array.from(
+    new Set(resultRows.map((result) => result.user_id)),
+  );
+  const { data: users, error: userError } = await supabase
+    .from("users")
+    .select("id, display_name")
+    .in("id", userIds);
+
+  if (userError) {
+    throw new Error(`${errorPrefix}: ${userError.message}`);
+  }
+
+  const usersById = new Map(
+    ((users ?? []) as Pick<User, "id" | "display_name">[]).map((user) => [
+      user.id,
+      user,
+    ]),
+  );
+
+  return resultRows.map((result) => ({
+    ...result,
+    user: usersById.get(result.user_id) ?? null,
   }));
 }
