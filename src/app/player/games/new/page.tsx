@@ -1,120 +1,422 @@
-﻿import { createGameDraftAction } from "./actions";
-import { listRecentGameDrafts } from "@/lib/services/game_service";
+import Link from "next/link";
+import type { ReactNode } from "react";
+
+import { createGameDraftAction } from "@/app/player/games/new/actions";
+import { getFirstActiveStore } from "@/lib/services/dashboard_service";
+import {
+  listCirclesWithMembersByStore,
+  type CircleWithDetails,
+} from "@/lib/services/circle_service";
+import {
+  listRecentGameDrafts,
+} from "@/lib/services/game_service";
+import {
+  listReservationsWithDetailsByStore,
+  type ReservationWithDetails,
+} from "@/lib/services/reservation_service";
+import { listRoomsByStore } from "@/lib/services/room_service";
+import type { Game, Room } from "@/types/domain";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewGamePage() {
-  const recentGames = await listRecentGameDrafts();
+type GamePageData = {
+  circles: CircleWithDetails[];
+  recent_games: Game[];
+  reservations: ReservationWithDetails[];
+  rooms: Room[];
+  store_id: string;
+  store_name: string;
+};
+
+type Metric = {
+  label: string;
+  suffix: string;
+  value: number;
+};
+
+type NewGamePageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const steps = [
+  "选择熟人圈",
+  "选择包厢",
+  "关联预约记录",
+  "创建牌局草稿",
+  "后续添加参与玩家",
+];
+
+export default async function NewGamePage({ searchParams }: NewGamePageProps) {
+  const pageData = await loadGamePageData();
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+
+  if (pageData.status === "empty") {
+    return <GameShell>{renderNoStoreState()}</GameShell>;
+  }
+
+  const metrics = buildMetrics(pageData.data);
+  const sortedCircles = sortRecommendedCircles(pageData.data.circles);
+  const sortedRooms = sortRecommendedRooms(pageData.data.rooms);
+  const successMessage = getSearchParam(resolvedSearchParams, "created");
+  const errorMessage = getSearchParam(resolvedSearchParams, "error");
+  const createdGame = {
+    circle_id: getSearchParam(resolvedSearchParams, "circle_id"),
+    game_count: getSearchParam(resolvedSearchParams, "game_count"),
+    game_id: getSearchParam(resolvedSearchParams, "game_id"),
+    reservation_id: getSearchParam(resolvedSearchParams, "reservation_id"),
+    room_id: getSearchParam(resolvedSearchParams, "room_id"),
+    status: getSearchParam(resolvedSearchParams, "status"),
+  };
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6">
-          <p className="text-sm font-medium text-slate-500">玩家端</p>
-          <h1 className="mt-1 text-2xl font-semibold text-slate-950">
-            创建牌局草稿
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            当前版本只创建牌局草稿，只写入 games 表。不会添加参与玩家，不会保存娱乐积分，不会生成战绩海报，不涉及登录、权限、支付或结算。
-          </p>
-        </div>
+    <GameShell>
+      <header className="mt-6 rounded-3xl bg-[#12332a] p-6 text-[#fff8ea]">
+        <p className="text-sm font-semibold text-[#f1dba5]">快速开局</p>
+        <h1 className="mt-3 text-3xl font-semibold">创建牌局草稿</h1>
+        <p className="mt-3 text-xl font-semibold">{pageData.data.store_name}</p>
+        <p className="mt-3 leading-7 text-[#e8dbc4]">
+          当前仅创建牌局草稿，不会保存娱乐积分结果。
+        </p>
+        <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
+          娱乐积分，仅作休闲记录。
+        </p>
+      </header>
 
-        <form action={createGameDraftAction} className="grid gap-5">
-          <div className="grid gap-2">
-            <label
-              htmlFor="store_id"
-              className="text-sm font-medium text-slate-700"
-            >
-              门店 ID，可留空
-            </label>
-            <input
-              id="store_id"
-              name="store_id"
-              type="text"
-              placeholder="留空时自动使用第一条测试门店"
-              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900"
-            />
-            <p className="text-xs text-slate-500">
-              开发库无登录模式下，留空会读取 stores 表第一条门店作为 store_id。
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <article
+            className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5"
+            key={metric.label}
+          >
+            <p className="text-sm text-[#5d756d]">{metric.label}</p>
+            <p className="mt-3 text-3xl font-semibold">
+              {metric.value}
+              <span className="ml-1 text-base font-medium text-[#5d756d]">
+                {metric.suffix}
+              </span>
             </p>
-          </div>
+          </article>
+        ))}
+      </section>
 
-          <div className="grid gap-2">
-            <label
-              htmlFor="game_count"
-              className="text-sm font-medium text-slate-700"
+      {successMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">
+            牌局草稿已创建
+          </p>
+          <div className="mt-4 grid gap-3 text-sm leading-7 text-[#4d665e] md:grid-cols-2">
+            <p>game id：{createdGame.game_id ?? "未返回"}</p>
+            <p>status：{createdGame.status ?? "未返回"}</p>
+            <p>game_count：{createdGame.game_count ?? "未返回"}</p>
+            <p>room_id：{formatNullableId(createdGame.room_id)}</p>
+            <p>circle_id：{formatNullableId(createdGame.circle_id)}</p>
+            <p>reservation_id：{formatNullableId(createdGame.reservation_id)}</p>
+          </div>
+        </section>
+      ) : null}
+
+      {errorMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            {errorMessage}
+          </p>
+        </section>
+      ) : null}
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">创建草稿</p>
+        <form action={createGameDraftAction} className="mt-5 grid gap-4">
+          <input name="store_id" type="hidden" value={pageData.data.store_id} />
+
+          <label className="grid gap-2 text-sm font-semibold">
+            包厢（可选）
+            <select
+              className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+              name="room_id"
             >
-              局数
-            </label>
-            <input
-              id="game_count"
-              name="game_count"
-              type="number"
-              min="1"
-              defaultValue="1"
-              className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-900"
-            />
-          </div>
+              <option value="">不选择包厢</option>
+              {sortedRooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-            <p>写入规则：</p>
-            <p>status = created</p>
-            <p>game_count 默认 1</p>
-            <p>只写 games 表</p>
-          </div>
+          <label className="grid gap-2 text-sm font-semibold">
+            熟人圈（可选）
+            <select
+              className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+              name="circle_id"
+            >
+              <option value="">不选择熟人圈</option>
+              {sortedCircles.map((circle) => (
+                <option key={circle.id} value={circle.id}>
+                  {circle.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-2 text-sm font-semibold">
+            预约记录（可选）
+            <select
+              className="rounded-2xl border border-[#e1cfaa] bg-[#f7f1e6] px-4 py-3 text-sm font-medium"
+              name="reservation_id"
+            >
+              <option value="">不关联预约记录</option>
+              {pageData.data.reservations.map((reservation) => (
+                <option key={reservation.id} value={reservation.id}>
+                  {reservation.reservation_date} {reservation.start_time}-
+                  {reservation.end_time} · {reservation.room?.name ?? "未命名包厢"}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <button
+            className="rounded-full bg-[#d3a443] px-5 py-3 text-sm font-semibold text-[#12332a]"
             type="submit"
-            className="w-fit rounded-xl bg-slate-950 px-5 py-3 text-sm font-medium text-white"
           >
             创建牌局草稿
           </button>
         </form>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-950">最近牌局草稿</h2>
-
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th className="px-4 py-3 font-medium">创建时间</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">局数</th>
-                <th className="px-4 py-3 font-medium">门店 ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentGames.map((game) => (
-                <tr key={game.id} className="border-t border-slate-200">
-                  <td className="px-4 py-3 text-slate-700">
-                    {new Date(game.created_at).toLocaleString("zh-CN")}
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{game.status}</td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {game.game_count}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">
-                    {game.store_id}
-                  </td>
-                </tr>
-              ))}
-
-              {recentGames.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-6 text-center text-sm text-slate-500"
-                  >
-                    暂无牌局草稿
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">快速开局步骤</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {steps.map((step, index) => (
+            <div className="rounded-2xl bg-[#f7f1e6] p-4" key={step}>
+              <p className="text-xs font-semibold text-[#9b7428]">
+                STEP {index + 1}
+              </p>
+              <p className="mt-2 text-sm font-semibold">{step}</p>
+            </div>
+          ))}
         </div>
       </section>
+
+      <section className="mt-6 grid gap-5 lg:grid-cols-2">
+        <OverviewSection title="推荐开局圈子">
+          {sortedCircles.length === 0 ? (
+            <EmptyLine>暂无熟人圈数据。</EmptyLine>
+          ) : (
+            <div className="grid gap-3">
+              {sortedCircles.slice(0, 4).map((circle) => (
+                <article
+                  className="rounded-2xl bg-[#f7f1e6] p-4"
+                  key={circle.id}
+                >
+                  <h3 className="text-xl font-semibold">{circle.name}</h3>
+                  <p className="mt-2 text-sm text-[#5d756d]">
+                    圈主：{circle.owner?.display_name ?? "未命名用户"}
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <SmallMetric
+                      label="成员数"
+                      value={`${circle.member_count} 人`}
+                    />
+                    <SmallMetric
+                      label="累计局数"
+                      value={`${circle.game_count} 局`}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </OverviewSection>
+
+        <OverviewSection title="推荐包厢">
+          {sortedRooms.length === 0 ? (
+            <EmptyLine>暂无可用包厢数据。</EmptyLine>
+          ) : (
+            <div className="grid gap-3">
+              {sortedRooms.slice(0, 4).map((room) => (
+                <article
+                  className="rounded-2xl bg-[#f7f1e6] p-4"
+                  key={room.id}
+                >
+                  <h3 className="text-xl font-semibold">{room.name}</h3>
+                  <p className="mt-2 text-sm text-[#5d756d]">
+                    容量：{room.capacity} 人
+                  </p>
+                  <p className="mt-2 text-sm text-[#5d756d]">
+                    楼层：{room.floor_label ?? "未设置"}
+                  </p>
+                  <p className="mt-2 text-sm text-[#5d756d]">
+                    状态：{room.status}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </OverviewSection>
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">最近牌局草稿</p>
+        {pageData.data.recent_games.length === 0 ? (
+          <EmptyLine>暂无牌局草稿。</EmptyLine>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {pageData.data.recent_games.map((game) => (
+              <article className="rounded-2xl bg-[#f7f1e6] p-4" key={game.id}>
+                <p className="text-sm font-semibold text-[#12332a]">
+                  {game.id}
+                </p>
+                <div className="mt-3 grid gap-2 text-sm text-[#5d756d] sm:grid-cols-2">
+                  <p>status：{game.status}</p>
+                  <p>game_count：{game.game_count}</p>
+                  <p>room_id：{game.room_id ?? "未选择"}</p>
+                  <p>circle_id：{game.circle_id ?? "未选择"}</p>
+                  <p>reservation_id：{game.reservation_id ?? "未选择"}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </GameShell>
+  );
+}
+
+async function loadGamePageData(): Promise<
+  | { status: "empty" }
+  | { data: GamePageData; status: "ready" }
+> {
+  const store = await getFirstActiveStore();
+
+  if (!store) {
+    return { status: "empty" };
+  }
+
+  const [rooms, circles, reservations, recentGames] = await Promise.all([
+    listRoomsByStore(store.id),
+    listCirclesWithMembersByStore(store.id),
+    listReservationsWithDetailsByStore(store.id),
+    listRecentGameDrafts(store.id),
+  ]);
+  const activeRooms = rooms.filter((room) => room.status === "active");
+
+  return {
+    data: {
+      circles,
+      recent_games: recentGames,
+      reservations,
+      rooms: activeRooms,
+      store_id: store.id,
+      store_name: store.name,
+    },
+    status: "ready",
+  };
+}
+
+function buildMetrics(data: GamePageData): Metric[] {
+  return [
+    { label: "可用包厢数量", suffix: "间", value: data.rooms.length },
+    { label: "熟人圈数量", suffix: "个", value: data.circles.length },
+    { label: "可选预约记录", suffix: "条", value: data.reservations.length },
+    { label: "草稿数量", suffix: "条", value: data.recent_games.length },
+  ];
+}
+
+function sortRecommendedCircles(
+  circles: CircleWithDetails[],
+): CircleWithDetails[] {
+  return [...circles].sort((first, second) => {
+    const firstReady = first.member_count >= 4 ? 1 : 0;
+    const secondReady = second.member_count >= 4 ? 1 : 0;
+
+    if (secondReady !== firstReady) {
+      return secondReady - firstReady;
+    }
+
+    return second.game_count - first.game_count;
+  });
+}
+
+function sortRecommendedRooms(rooms: Room[]): Room[] {
+  return [...rooms].sort((first, second) => {
+    const firstActive = first.status === "active" ? 1 : 0;
+    const secondActive = second.status === "active" ? 1 : 0;
+
+    return secondActive - firstActive;
+  });
+}
+
+function getSearchParam(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+): string | null {
+  const value = searchParams[key];
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+function formatNullableId(value: string | null): string {
+  return value && value !== "null" ? value : "未选择";
+}
+
+function GameShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="min-h-screen bg-[#f7f1e6] px-5 py-8 text-[#12332a]">
+      <div className="mx-auto max-w-6xl">
+        <Link className="text-sm font-medium text-[#9b7428]" href="/player">
+          返回玩家中心
+        </Link>
+        {children}
+      </div>
     </main>
+  );
+}
+
+function OverviewSection({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+      <p className="text-sm font-semibold text-[#9b7428]">{title}</p>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function SmallMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-[#fff8ea] p-3">
+      <p className="text-xs text-[#5d756d]">{label}</p>
+      <p className="mt-1 text-lg font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function EmptyLine({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+      {children}
+    </p>
+  );
+}
+
+function renderNoStoreState() {
+  return (
+    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-8">
+      <p className="text-sm font-semibold text-[#9b7428]">快速开局</p>
+      <h1 className="mt-3 text-3xl font-semibold">暂无门店数据</h1>
+      <p className="mt-3 max-w-2xl leading-7 text-[#4d665e]">
+        当前没有可用于展示的 active 门店。添加门店测试数据后，此页会显示真实开局选项。
+      </p>
+    </section>
   );
 }
