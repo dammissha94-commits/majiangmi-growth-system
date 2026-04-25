@@ -7,6 +7,7 @@ import {
   createGameDraft,
   saveEntertainmentResults,
 } from "@/lib/services/game_service";
+import { createResultCardForGame } from "@/lib/services/result_card_service";
 
 export async function createGameDraftAction(formData: FormData): Promise<void> {
   let createdGame: Awaited<ReturnType<typeof createGameDraft>>;
@@ -143,6 +144,37 @@ export async function saveEntertainmentResultsAction(
   });
 
   redirect(`/player/games/new?${searchParams.toString()}`);
+}
+
+export async function createResultCardAction(formData: FormData): Promise<void> {
+  let result: Awaited<ReturnType<typeof createResultCardForGame>>;
+
+  try {
+    result = await createResultCardForGame(
+      getRequiredFormValue(
+        formData,
+        "game_id",
+        "create_result_card_for_game_failed",
+      ),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown_error";
+    redirect(`/player/games/new?card_error=${encodeURIComponent(message)}`);
+  }
+
+  redirect(
+    `/player/games/new?card_status=${encodeURIComponent(
+      result.status,
+    )}&result_card_id=${encodeURIComponent(
+      result.result_card.id,
+    )}&card_title=${encodeURIComponent(
+      result.result_card.card_title,
+    )}&card_subtitle=${encodeURIComponent(
+      result.result_card.card_subtitle ?? "",
+    )}&share_count=${encodeURIComponent(
+      String(result.result_card.share_count),
+    )}&generated_at=${encodeURIComponent(result.result_card.generated_at)}`,
+  );
 }
 
 function getRequiredFormValue(

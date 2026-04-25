@@ -24,6 +24,18 @@ export type PlayerResultCardDetails = {
   store: Pick<Store, "name"> | null;
 };
 
+export type GameReadyForResultCard = {
+  circle: Pick<Circle, "name"> | null;
+  game: Game;
+  mvp_user: Pick<User, "display_name"> | null;
+  result_count: number;
+};
+
+export type CreateResultCardForGameResult = {
+  result_card: ResultCard;
+  status: "already_exists" | "created";
+};
+
 export async function createResultCard(
   input: ResultCardInsert,
 ): Promise<ResultCard> {
@@ -39,6 +51,165 @@ export async function createResultCard(
   }
 
   return data;
+}
+
+export async function getLatestGameReadyForResultCardByStore(
+  store_id: string,
+): Promise<GameReadyForResultCard | null> {
+  const supabase = await createClient();
+  const { data: games, error: gameError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("store_id", store_id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (gameError) {
+    throw new Error(
+      `get_latest_game_ready_for_result_card_by_store_failed: ${gameError.message}`,
+    );
+  }
+
+  const gameRows = (games ?? []) as Game[];
+
+  for (const game of gameRows) {
+    const existingResultCard = await getResultCardByGameId(
+      game.id,
+      "get_latest_game_ready_for_result_card_by_store_failed",
+    );
+
+    if (existingResultCard) {
+      continue;
+    }
+
+    const { data: results, error: resultError } = await supabase
+      .from("game_results")
+      .select("*")
+      .eq("game_id", game.id)
+      .order("rank", { ascending: true });
+
+    if (resultError) {
+      throw new Error(
+        `get_latest_game_ready_for_result_card_by_store_failed: ${resultError.message}`,
+      );
+    }
+
+    const resultRows = (results ?? []) as GameResult[];
+
+    if (resultRows.length === 0) {
+      continue;
+    }
+
+    const circle = await getCircleNameById(
+      game.circle_id,
+      "get_latest_game_ready_for_result_card_by_store_failed",
+    );
+    const mvpResult = resultRows.find((result) => result.is_mvp);
+    const mvpUser = mvpResult
+      ? await getUserDisplayNameById(
+          mvpResult.user_id,
+          "get_latest_game_ready_for_result_card_by_store_failed",
+        )
+      : null;
+
+    return {
+      circle,
+      game,
+      mvp_user: mvpUser,
+      result_count: resultRows.length,
+    };
+  }
+
+  return null;
+}
+
+export async function createResultCardForGame(
+  game_id: string,
+): Promise<CreateResultCardForGameResult> {
+  const supabase = await createClient();
+  const { data: game, error: gameError } = await supabase
+    .from("games")
+    .select("*")
+    .eq("id", game_id)
+    .maybeSingle();
+
+  if (gameError) {
+    throw new Error(`create_result_card_for_game_failed: ${gameError.message}`);
+  }
+
+  const gameRow = game as Game | null;
+
+  if (!gameRow) {
+    throw new Error("create_result_card_for_game_failed: game_not_found");
+  }
+
+  const existingResultCard = await getResultCardByGameId(
+    game_id,
+    "create_result_card_for_game_failed",
+  );
+
+  if (existingResultCard) {
+    return {
+      result_card: existingResultCard,
+      status: "already_exists",
+    };
+  }
+
+  const { data: results, error: resultError } = await supabase
+    .from("game_results")
+    .select("id")
+    .eq("game_id", game_id)
+    .limit(1);
+
+  if (resultError) {
+    throw new Error(
+      `create_result_card_for_game_failed: ${resultError.message}`,
+    );
+  }
+
+  if ((results ?? []).length === 0) {
+    throw new Error("create_result_card_for_game_failed: game_results_required");
+  }
+
+  const circle = await getCircleNameById(
+    gameRow.circle_id,
+    "create_result_card_for_game_failed",
+  );
+  const { data: resultCard, error: resultCardError } = await supabase
+    .from("result_cards")
+    .insert({
+      card_subtitle: "娱乐积分，仅作休闲记录",
+      card_title: circle ? `${circle.name}战绩海报` : "麻将迷战绩海报",
+      circle_id: gameRow.circle_id,
+      game_id,
+      generated_at: new Date().toISOString(),
+      share_count: 0,
+      store_id: gameRow.store_id,
+    })
+    .select("*")
+    .single();
+
+  if (resultCardError) {
+    throw new Error(
+      `create_result_card_for_game_failed: ${resultCardError.message}`,
+    );
+  }
+
+  const { error: gameUpdateError } = await supabase
+    .from("games")
+    .update({ status: "card_generated" })
+    .eq("id", game_id);
+
+  if (gameUpdateError) {
+    throw new Error(
+      `create_result_card_for_game_failed: ${gameUpdateError.message}`,
+    );
+  }
+
+  return {
+    result_card: resultCard,
+    status: "created",
+  };
 }
 
 export async function getResultCardById(
@@ -124,6 +295,65 @@ async function getLatestResultCardByStore(
   }
 
   return data;
+}
+
+async function getResultCardByGameId(
+  game_id: string,
+  errorPrefix: string,
+): Promise<ResultCard | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("result_cards")
+    .select("*")
+    .eq("game_id", game_id)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`${errorPrefix}: ${error.message}`);
+  }
+
+  return data;
+}
+
+async function getCircleNameById(
+  circle_id: string | null,
+  errorPrefix: string,
+): Promise<Pick<Circle, "name"> | null> {
+  if (!circle_id) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("circles")
+    .select("name")
+    .eq("id", circle_id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`${errorPrefix}: ${error.message}`);
+  }
+
+  return data as Pick<Circle, "name"> | null;
+}
+
+async function getUserDisplayNameById(
+  user_id: string,
+  errorPrefix: string,
+): Promise<Pick<User, "display_name"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("display_name")
+    .eq("id", user_id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`${errorPrefix}: ${error.message}`);
+  }
+
+  return data as Pick<User, "display_name"> | null;
 }
 
 async function getResultCardDetails(

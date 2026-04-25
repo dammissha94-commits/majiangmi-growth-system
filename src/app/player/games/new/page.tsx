@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   addFourParticipantsAction,
   createGameDraftAction,
+  createResultCardAction,
   saveEntertainmentResultsAction,
 } from "@/app/player/games/new/actions";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
@@ -21,6 +22,10 @@ import {
   listReservationsWithDetailsByStore,
   type ReservationWithDetails,
 } from "@/lib/services/reservation_service";
+import {
+  getLatestGameReadyForResultCardByStore,
+  type GameReadyForResultCard,
+} from "@/lib/services/result_card_service";
 import { listRoomsByStore } from "@/lib/services/room_service";
 import type { Game, Room } from "@/types/domain";
 
@@ -29,6 +34,7 @@ export const dynamic = "force-dynamic";
 type GamePageData = {
   circles: CircleWithDetails[];
   latest_game_draft: Game | null;
+  latest_game_ready_for_result_card: GameReadyForResultCard | null;
   latest_game_ready_for_results: GameReadyForResults | null;
   recent_games: Game[];
   reservations: ReservationWithDetails[];
@@ -85,9 +91,18 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
   );
   const resultErrorMessage = getSearchParam(resolvedSearchParams, "result_error");
   const resultStatus = getSearchParam(resolvedSearchParams, "result_status");
+  const cardErrorMessage = getSearchParam(resolvedSearchParams, "card_error");
+  const cardStatus = getSearchParam(resolvedSearchParams, "card_status");
   const participantRows = buildParticipantRows(resolvedSearchParams);
   const resultRows = buildResultRows(resolvedSearchParams);
   const mvpPlayer = getSearchParam(resolvedSearchParams, "mvp_player");
+  const createdResultCard = {
+    card_subtitle: getSearchParam(resolvedSearchParams, "card_subtitle"),
+    card_title: getSearchParam(resolvedSearchParams, "card_title"),
+    generated_at: getSearchParam(resolvedSearchParams, "generated_at"),
+    result_card_id: getSearchParam(resolvedSearchParams, "result_card_id"),
+    share_count: getSearchParam(resolvedSearchParams, "share_count"),
+  };
   const createdGame = {
     circle_id: getSearchParam(resolvedSearchParams, "circle_id"),
     game_count: getSearchParam(resolvedSearchParams, "game_count"),
@@ -111,6 +126,9 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         </p>
         <p className="mt-3 leading-7 text-[#e8dbc4]">
           当前步骤只保存娱乐积分结果，不会生成战绩海报。
+        </p>
+        <p className="mt-3 leading-7 text-[#e8dbc4]">
+          当前步骤只生成战绩海报记录，不生成真实图片，不接分享 SDK。
         </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
@@ -210,11 +228,45 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         </section>
       ) : null}
 
+      {cardStatus ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">
+            {cardStatus === "already_exists"
+              ? "该牌局已生成战绩海报记录"
+              : "战绩海报记录已生成"}
+          </p>
+          <div className="mt-4 grid gap-3 text-sm leading-7 text-[#4d665e] md:grid-cols-2">
+            <p>result_card_id：{createdResultCard.result_card_id ?? "未返回"}</p>
+            <p>card_title：{createdResultCard.card_title ?? "未返回"}</p>
+            <p>card_subtitle：{createdResultCard.card_subtitle ?? "未返回"}</p>
+            <p>share_count：{createdResultCard.share_count ?? "未返回"}</p>
+            <p>generated_at：{createdResultCard.generated_at ?? "未返回"}</p>
+          </div>
+          {createdResultCard.result_card_id ? (
+            <Link
+              className="mt-5 inline-flex rounded-full bg-[#12332a] px-5 py-3 text-sm font-semibold text-[#fff8ea]"
+              href={`/player/results/${createdResultCard.result_card_id}`}
+            >
+              查看战绩海报
+            </Link>
+          ) : null}
+        </section>
+      ) : null}
+
       {errorMessage ? (
         <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
           <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
           <p className="mt-3 text-sm leading-7 text-[#4d665e]">
             {errorMessage}
+          </p>
+        </section>
+      ) : null}
+
+      {cardErrorMessage ? (
+        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
+          <p className="text-sm font-semibold text-[#9b7428]">生成失败</p>
+          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+            {cardErrorMessage}
           </p>
         </section>
       ) : null}
@@ -444,6 +496,45 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
       </section>
 
       <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">
+          待生成战绩海报的牌局
+        </p>
+        {pageData.data.latest_game_ready_for_result_card ? (
+          <div className="mt-5 grid gap-4">
+            <div className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+              <p>
+                game_id：{pageData.data.latest_game_ready_for_result_card.game.id}
+              </p>
+              <p>
+                circle：{pageData.data.latest_game_ready_for_result_card.circle?.name ?? "未关联圈子"}
+              </p>
+              <p>
+                result_count：{pageData.data.latest_game_ready_for_result_card.result_count}
+              </p>
+              <p>
+                MVP 玩家：{pageData.data.latest_game_ready_for_result_card.mvp_user?.display_name ?? "暂无"}
+              </p>
+            </div>
+            <form action={createResultCardAction}>
+              <input
+                name="game_id"
+                type="hidden"
+                value={pageData.data.latest_game_ready_for_result_card.game.id}
+              />
+              <button
+                className="w-full rounded-full bg-[#d3a443] px-5 py-3 text-sm font-semibold text-[#12332a]"
+                type="submit"
+              >
+                生成战绩海报记录
+              </button>
+            </form>
+          </div>
+        ) : (
+          <EmptyLine>暂无可生成战绩海报记录的牌局。</EmptyLine>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
         <p className="text-sm font-semibold text-[#9b7428]">快速开局步骤</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {steps.map((step, index) => (
@@ -559,6 +650,7 @@ async function loadGamePageData(): Promise<
     recentGames,
     latestGameDraft,
     latestGameReadyForResults,
+    latestGameReadyForResultCard,
   ] = await Promise.all([
     listRoomsByStore(store.id),
     listCirclesWithMembersByStore(store.id),
@@ -566,6 +658,7 @@ async function loadGamePageData(): Promise<
     listRecentGameDrafts(store.id),
     getLatestGameDraftByStore(store.id),
     getLatestGameReadyForResultsByStore(store.id),
+    getLatestGameReadyForResultCardByStore(store.id),
   ]);
   const activeRooms = rooms.filter((room) => room.status === "active");
 
@@ -573,6 +666,7 @@ async function loadGamePageData(): Promise<
     data: {
       circles,
       latest_game_draft: latestGameDraft,
+      latest_game_ready_for_result_card: latestGameReadyForResultCard,
       latest_game_ready_for_results: latestGameReadyForResults,
       recent_games: recentGames,
       reservations,
