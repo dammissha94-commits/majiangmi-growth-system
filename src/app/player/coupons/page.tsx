@@ -1,70 +1,282 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
-const coupons = [
-  {
-    name: "新人券",
-    scene: "首次加入门店会员后可用",
-    status: "待使用",
-  },
-  {
-    name: "复购券",
-    scene: "完成本周开局后可用",
-    status: "待预约",
-  },
-  {
-    name: "工作日券",
-    scene: "周一至周四非高峰时段可用",
-    status: "可领取",
-  },
-  {
-    name: "圈主券",
-    scene: "圈主邀请好友到店后可用",
-    status: "待激活",
-  },
-];
+import { getFirstActiveStore } from "@/lib/services/dashboard_service";
+import {
+  listCouponsWithRedemptionsByStore,
+  type CouponWithRedemptions,
+} from "@/lib/services/coupon_service";
 
-export default function PlayerCouponsPage() {
+export const dynamic = "force-dynamic";
+
+type PlayerCouponPageData = {
+  coupons: CouponWithRedemptions[];
+  store_name: string;
+};
+
+type Metric = {
+  label: string;
+  suffix: string;
+  value: number;
+};
+
+export default async function PlayerCouponsPage() {
+  const pageData = await loadPlayerCouponPageData();
+
+  if (pageData.status === "empty") {
+    return <CouponShell>{renderNoStoreState()}</CouponShell>;
+  }
+
+  const metrics = buildMetrics(pageData.data.coupons);
+  const tips = buildTips(pageData.data.coupons);
+
+  return (
+    <CouponShell>
+      <header className="mt-6 rounded-3xl bg-[#12332a] p-6 text-[#fff8ea]">
+        <p className="text-sm font-semibold text-[#f1dba5]">我的卡券</p>
+        <h1 className="mt-3 text-3xl font-semibold">可用复购权益</h1>
+        <p className="mt-3 text-xl font-semibold">{pageData.data.store_name}</p>
+        <p className="mt-3 leading-7 text-[#e8dbc4]">
+          查看门店当前可用卡券，适合搭配熟人圈开局和下一次预约使用。
+        </p>
+        <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
+          娱乐积分，仅作休闲记录。
+        </p>
+      </header>
+
+      <section className="mt-6 grid gap-4 sm:grid-cols-3">
+        {metrics.map((metric) => (
+          <article
+            className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5"
+            key={metric.label}
+          >
+            <p className="text-sm text-[#5d756d]">{metric.label}</p>
+            <p className="mt-3 text-3xl font-semibold">
+              {metric.value}
+              <span className="ml-1 text-base font-medium text-[#5d756d]">
+                {metric.suffix}
+              </span>
+            </p>
+          </article>
+        ))}
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-sm font-semibold text-[#9b7428]">使用提示</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {tips.map((tip) => (
+            <div
+              className="rounded-2xl bg-[#f7f1e6] p-4 text-sm font-medium leading-6"
+              key={tip}
+            >
+              {tip}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-6 grid gap-4">
+        {pageData.data.coupons.length === 0 ? (
+          <div className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-6 text-sm leading-7 text-[#4d665e]">
+            暂无可用卡券。
+          </div>
+        ) : (
+          pageData.data.coupons.map((coupon) => {
+            const claimedCount = coupon.redemptions.length;
+            const usedCount = coupon.redemptions.filter(
+              (redemption) => redemption.status === "used",
+            ).length;
+
+            return (
+              <article
+                className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 shadow-sm"
+                key={coupon.id}
+              >
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-semibold">{coupon.name}</h2>
+                      <span className="rounded-full bg-[#f1dba5] px-3 py-1 text-xs font-semibold text-[#12332a]">
+                        {formatCouponType(coupon.coupon_type)}
+                      </span>
+                    </div>
+                    <p className="mt-3 leading-7 text-[#4d665e]">
+                      {coupon.description ?? "门店服务权益，适合下次到店使用。"}
+                    </p>
+                    <p className="mt-3 text-sm text-[#5d756d]">
+                      有效期：{formatDateTime(coupon.valid_from)} 至{" "}
+                      {formatDateTime(coupon.valid_to)}
+                    </p>
+                    <p className="mt-2 text-sm text-[#5d756d]">
+                      状态：{coupon.status}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:min-w-48">
+                    <SmallMetric label="领取人数" value={`${claimedCount} 人`} />
+                    <SmallMetric label="核销人数" value={`${usedCount} 人`} />
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <button
+                    className="rounded-full border border-[#b7892c] px-4 py-3 text-sm font-semibold text-[#12332a]"
+                    type="button"
+                  >
+                    查看详情
+                  </button>
+                  <button
+                    className="rounded-full bg-[#12332a] px-4 py-3 text-sm font-semibold text-[#fff8ea]"
+                    type="button"
+                  >
+                    去预约下一局
+                  </button>
+                </div>
+              </article>
+            );
+          })
+        )}
+      </section>
+    </CouponShell>
+  );
+}
+
+async function loadPlayerCouponPageData(): Promise<
+  | { status: "empty" }
+  | { data: PlayerCouponPageData; status: "ready" }
+> {
+  const store = await getFirstActiveStore();
+
+  if (!store) {
+    return { status: "empty" };
+  }
+
+  const coupons = await listCouponsWithRedemptionsByStore(store.id);
+  const activeCoupons = coupons.filter((coupon) => coupon.status === "active");
+
+  return {
+    data: {
+      coupons: activeCoupons,
+      store_name: store.name,
+    },
+    status: "ready",
+  };
+}
+
+function buildMetrics(coupons: CouponWithRedemptions[]): Metric[] {
+  const claimedCount = coupons.reduce(
+    (total, coupon) => total + coupon.redemptions.length,
+    0,
+  );
+  const usedCount = coupons.reduce(
+    (total, coupon) =>
+      total +
+      coupon.redemptions.filter((redemption) => redemption.status === "used")
+        .length,
+    0,
+  );
+
+  return [
+    { label: "可用卡券总数", suffix: "张", value: coupons.length },
+    { label: "已领取数量", suffix: "张", value: claimedCount },
+    { label: "已核销数量", suffix: "张", value: usedCount },
+  ];
+}
+
+function buildTips(coupons: CouponWithRedemptions[]): string[] {
+  const claimedCount = coupons.reduce(
+    (total, coupon) => total + coupon.redemptions.length,
+    0,
+  );
+  const hasTimeSlotCoupon = coupons.some(
+    (coupon) => coupon.coupon_type === "time_slot",
+  );
+  const hasTeaOrSnackCoupon = coupons.some(
+    (coupon) => coupon.coupon_type === "tea" || coupon.coupon_type === "snack",
+  );
+  const tips: string[] = [];
+
+  if (coupons.length === 0) {
+    tips.push("当前暂无可用卡券，可关注门店后续活动");
+  }
+
+  if (hasTimeSlotCoupon) {
+    tips.push("可优先用于工作日或空置时段预约");
+  }
+
+  if (hasTeaOrSnackCoupon) {
+    tips.push("适合搭配熟人局到店使用");
+  }
+
+  if (claimedCount > 0) {
+    tips.push("已领取卡券建议在有效期内使用");
+  }
+
+  if (tips.length === 0) {
+    tips.push("可关注门店活动，合理安排下一局预约");
+  }
+
+  return tips;
+}
+
+function formatCouponType(couponType: string): string {
+  const labels: Record<string, string> = {
+    campaign: "活动券",
+    snack: "小食券",
+    store_service: "门店服务券",
+    tea: "茶水券",
+    time_slot: "时段券",
+  };
+
+  return labels[couponType] ?? couponType;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return "未设置";
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function CouponShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-[#f7f1e6] px-5 py-8 text-[#12332a]">
       <div className="mx-auto max-w-5xl">
         <Link className="text-sm font-medium text-[#9b7428]" href="/player">
           返回玩家中心
         </Link>
-        <header className="mt-6">
-          <p className="text-sm font-semibold text-[#9b7428]">我的卡券</p>
-          <h1 className="mt-3 text-3xl font-semibold">领取复购权益</h1>
-          <p className="mt-3 leading-7 text-[#4d665e]">
-            用卡券推动再次预约，连接熟人圈活跃与门店复购。
-          </p>
-        </header>
-
-        <section className="mt-8 grid gap-4 sm:grid-cols-2">
-          {coupons.map((coupon) => (
-            <article
-              className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 shadow-sm"
-              key={coupon.name}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-semibold">{coupon.name}</h2>
-                  <p className="mt-3 leading-7 text-[#4d665e]">
-                    {coupon.scene}
-                  </p>
-                </div>
-                <span className="rounded-full bg-[#f1dba5] px-3 py-1 text-xs font-semibold text-[#12332a]">
-                  {coupon.status}
-                </span>
-              </div>
-              <Link
-                className="mt-5 block rounded-full border border-[#b7892c] px-4 py-3 text-center text-sm font-semibold"
-                href="/player/reservations/new"
-              >
-                去预约
-              </Link>
-            </article>
-          ))}
-        </section>
+        {children}
       </div>
     </main>
+  );
+}
+
+function renderNoStoreState() {
+  return (
+    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-8">
+      <p className="text-sm font-semibold text-[#9b7428]">我的卡券</p>
+      <h1 className="mt-3 text-3xl font-semibold">暂无门店数据</h1>
+      <p className="mt-3 max-w-2xl leading-7 text-[#4d665e]">
+        当前没有可用于展示的 active 门店。添加门店测试数据后，此页会显示真实卡券列表。
+      </p>
+    </section>
+  );
+}
+
+type SmallMetricProps = {
+  label: string;
+  value: string;
+};
+
+function SmallMetric({ label, value }: SmallMetricProps) {
+  return (
+    <div className="rounded-2xl bg-[#f7f1e6] p-4">
+      <p className="text-sm text-[#5d756d]">{label}</p>
+      <p className="mt-2 text-xl font-semibold">{value}</p>
+    </div>
   );
 }
