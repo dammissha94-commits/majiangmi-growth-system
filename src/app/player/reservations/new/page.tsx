@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { createReservationDraftAction } from "@/app/player/reservations/new/actions";
+import { OperationMessage } from "@/components/operation-message";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listCirclesWithMembersByStore,
@@ -71,10 +72,13 @@ export default async function NewReservationPage({
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
         </p>
-        <p className="mt-3 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
-          当前仅创建门店预约草稿，不涉及任何资金处理。
-        </p>
       </header>
+
+      <OperationMessage
+        description="当前仅创建门店预约草稿，不涉及任何资金处理。"
+        title="当前步骤边界"
+        type="info"
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2">
         {metrics.map((metric) => (
@@ -111,26 +115,25 @@ export default async function NewReservationPage({
       <PickerSection items={recommendedTimeSlots} title="推荐时段" />
 
       {successMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">
-            预约草稿已创建
-          </p>
-          <div className="mt-4 grid gap-3 text-sm leading-7 text-[#4d665e] sm:grid-cols-2">
-            <p>预约日期：{createdReservation.reservation_date ?? "未返回"}</p>
-            <p>开始时间：{createdReservation.start_time ?? "未返回"}</p>
-            <p>结束时间：{createdReservation.end_time ?? "未返回"}</p>
-            <p>状态：{createdReservation.status ?? "未返回"}</p>
-          </div>
-        </section>
+        <OperationMessage
+          description="当前仅创建门店预约草稿，不涉及任何资金处理。"
+          items={[
+            `预约日期：${createdReservation.reservation_date ?? "未返回"}`,
+            `开始时间：${createdReservation.start_time ?? "未返回"}`,
+            `结束时间：${createdReservation.end_time ?? "未返回"}`,
+            `状态：${createdReservation.status ?? "未返回"}`,
+          ]}
+          title="预约草稿已创建"
+          type="success"
+        />
       ) : null}
 
       {errorMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            {errorMessage}
-          </p>
-        </section>
+        <OperationMessage
+          description={errorMessage}
+          title="创建失败"
+          type="error"
+        />
       ) : null}
 
       <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
@@ -258,9 +261,11 @@ export default async function NewReservationPage({
         </div>
 
         {pageData.data.rooms.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
-            暂无可预约包厢。
-          </p>
+          <OperationMessage
+            description="当前暂无可用于预约草稿的 active 包厢。"
+            title="暂无可预约包厢"
+            type="info"
+          />
         ) : (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {pageData.data.rooms.map((room) => (
@@ -303,9 +308,11 @@ export default async function NewReservationPage({
         </div>
 
         {pageData.data.circles.length === 0 ? (
-          <p className="mt-5 rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
-            暂无熟人圈数据。
-          </p>
+          <OperationMessage
+            description="当前门店暂无可选熟人圈。"
+            title="暂无熟人圈数据"
+            type="info"
+          />
         ) : (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {pageData.data.circles.map((circle) => (

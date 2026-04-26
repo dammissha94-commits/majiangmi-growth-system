@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { claimCouponForUserAction } from "@/app/player/coupons/actions";
+import { OperationMessage } from "@/components/operation-message";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listCouponClaimUsers,
@@ -53,13 +54,16 @@ export default async function PlayerCouponsPage({
         <p className="mt-3 leading-7 text-[#e8dbc4]">
           查看门店当前可用卡券，适合搭配熟人圈开局和下一次预约使用。
         </p>
-        <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
-          当前仅创建门店卡券领取记录，不涉及任何资金处理。
-        </p>
         <p className="mt-3 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <OperationMessage
+        description="当前仅创建门店卡券领取记录，不涉及任何资金处理。"
+        title="当前步骤边界"
+        type="info"
+      />
 
       <ClaimFeedback
         couponName={getSearchParam(params, "coupon_name")}
@@ -102,9 +106,11 @@ export default async function PlayerCouponsPage({
 
       <section className="mt-6 grid gap-4">
         {pageData.data.coupons.length === 0 ? (
-          <div className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-6 text-sm leading-7 text-[#4d665e]">
-            暂无可用卡券。
-          </div>
+          <OperationMessage
+            description="当前暂无可领取的 active 卡券。"
+            title="暂无可用卡券"
+            type="info"
+          />
         ) : (
           pageData.data.coupons.map((coupon) => {
             const claimedCount = coupon.redemptions.length;
@@ -342,10 +348,7 @@ function ClaimFeedback({
 }) {
   if (error) {
     return (
-      <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5 text-sm leading-7 text-[#7c2d12]">
-        <p className="font-semibold">领取失败</p>
-        <p className="mt-2">{error}</p>
-      </section>
+      <OperationMessage description={error} title="领取失败" type="error" />
     );
   }
 
@@ -356,14 +359,20 @@ function ClaimFeedback({
   const isRepeated = status === "already_exists";
 
   return (
-    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 text-sm leading-7 text-[#12332a]">
-      <p className="font-semibold">
-        {isRepeated ? "该用户已领取过这张卡券" : "卡券已领取"}
-      </p>
-      <p className="mt-2">卡券名称：{couponName ?? "未命名卡券"}</p>
-      <p>领取用户：{userName ?? "未命名用户"}</p>
-      <p>status = {redemptionStatus ?? "claimed"}</p>
-    </section>
+    <OperationMessage
+      description={
+        isRepeated
+          ? "该用户已领取过这张卡券"
+          : "当前仅创建门店卡券领取记录，不涉及任何资金处理。"
+      }
+      items={[
+        `卡券名称：${couponName ?? "未命名卡券"}`,
+        `领取用户：${userName ?? "未命名用户"}`,
+        `status = ${redemptionStatus ?? "claimed"}`,
+      ]}
+      title={isRepeated ? "该用户已领取过这张卡券" : "卡券已领取"}
+      type={isRepeated ? "warning" : "success"}
+    />
   );
 }
 

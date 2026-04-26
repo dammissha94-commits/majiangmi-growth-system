@@ -7,6 +7,7 @@ import {
   createResultCardAction,
   saveEntertainmentResultsAction,
 } from "@/app/player/games/new/actions";
+import { OperationMessage } from "@/components/operation-message";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listCirclesWithMembersByStore,
@@ -118,22 +119,21 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
         <p className="text-sm font-semibold text-[#f1dba5]">快速开局</p>
         <h1 className="mt-3 text-3xl font-semibold">创建牌局草稿</h1>
         <p className="mt-3 text-xl font-semibold">{pageData.data.store_name}</p>
-        <p className="mt-3 leading-7 text-[#e8dbc4]">
-          当前仅创建牌局草稿，不会保存娱乐积分结果。
-        </p>
-        <p className="mt-3 leading-7 text-[#e8dbc4]">
-          当前步骤只添加参与玩家，不会保存娱乐积分结果。
-        </p>
-        <p className="mt-3 leading-7 text-[#e8dbc4]">
-          当前步骤只保存娱乐积分结果，不会生成战绩海报。
-        </p>
-        <p className="mt-3 leading-7 text-[#e8dbc4]">
-          当前步骤只生成战绩海报记录，不生成真实图片，不接分享 SDK。
-        </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <OperationMessage
+        items={[
+          "当前仅创建牌局草稿，不会保存娱乐积分结果。",
+          "当前步骤只添加参与玩家，不会保存娱乐积分结果。",
+          "当前步骤只保存娱乐积分结果，不会生成战绩海报。",
+          "当前步骤只生成战绩海报记录，不生成真实图片，不接分享 SDK。",
+        ]}
+        title="当前步骤边界"
+        type="info"
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => (
@@ -153,31 +153,35 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
       </section>
 
       {successMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">
-            牌局草稿已创建
-          </p>
-          <div className="mt-4 grid gap-3 text-sm leading-7 text-[#4d665e] md:grid-cols-2">
-            <p>game id：{createdGame.game_id ?? "未返回"}</p>
-            <p>status：{createdGame.status ?? "未返回"}</p>
-            <p>game_count：{createdGame.game_count ?? "未返回"}</p>
-            <p>room_id：{formatNullableId(createdGame.room_id)}</p>
-            <p>circle_id：{formatNullableId(createdGame.circle_id)}</p>
-            <p>reservation_id：{formatNullableId(createdGame.reservation_id)}</p>
-          </div>
-        </section>
+        <OperationMessage
+          description="当前仅创建牌局草稿，不会保存娱乐积分结果。"
+          items={[
+            `game id：${createdGame.game_id ?? "未返回"}`,
+            `status：${createdGame.status ?? "未返回"}`,
+            `game_count：${createdGame.game_count ?? "未返回"}`,
+            `room_id：${formatNullableId(createdGame.room_id)}`,
+            `circle_id：${formatNullableId(createdGame.circle_id)}`,
+            `reservation_id：${formatNullableId(createdGame.reservation_id)}`,
+          ]}
+          title="牌局草稿已创建"
+          type="success"
+        />
       ) : null}
 
       {participantStatus ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">
-            {participantStatus === "already_exists"
-              ? "该牌局已添加参与玩家"
-              : "4名参与玩家已添加"}
-          </p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            game_id：{getSearchParam(resolvedSearchParams, "game_id") ?? "未返回"}
-          </p>
+        <>
+          <OperationMessage
+            description="当前步骤只添加参与玩家，不会保存娱乐积分结果。"
+            items={[
+              `game_id：${getSearchParam(resolvedSearchParams, "game_id") ?? "未返回"}`,
+            ]}
+            title={
+              participantStatus === "already_exists"
+                ? "该牌局已添加参与玩家"
+                : "4名参与玩家已添加"
+            }
+            type={participantStatus === "already_exists" ? "warning" : "success"}
+          />
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {participantRows.map((participant) => (
               <div
@@ -193,22 +197,24 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
               </div>
             ))}
           </div>
-        </section>
+        </>
       ) : null}
 
       {resultStatus ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">
-            {resultStatus === "already_exists"
-              ? "该牌局已保存娱乐积分结果"
-              : "娱乐积分结果已保存"}
-          </p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            game_id：{getSearchParam(resolvedSearchParams, "game_id") ?? "未返回"}
-          </p>
-          <p className="mt-2 text-sm leading-7 text-[#4d665e]">
-            MVP 玩家：{mvpPlayer ?? "暂无"}
-          </p>
+        <>
+          <OperationMessage
+            description="娱乐积分，仅作休闲记录。"
+            items={[
+              `game_id：${getSearchParam(resolvedSearchParams, "game_id") ?? "未返回"}`,
+              `MVP 玩家：${mvpPlayer ?? "暂无"}`,
+            ]}
+            title={
+              resultStatus === "already_exists"
+                ? "该牌局已保存娱乐积分结果"
+                : "娱乐积分结果已保存"
+            }
+            type={resultStatus === "already_exists" ? "warning" : "success"}
+          />
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {resultRows.map((result) => (
               <div
@@ -225,23 +231,27 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
               </div>
             ))}
           </div>
-        </section>
+        </>
       ) : null}
 
       {cardStatus ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">
-            {cardStatus === "already_exists"
-              ? "该牌局已生成战绩海报记录"
-              : "战绩海报记录已生成"}
-          </p>
-          <div className="mt-4 grid gap-3 text-sm leading-7 text-[#4d665e] md:grid-cols-2">
-            <p>result_card_id：{createdResultCard.result_card_id ?? "未返回"}</p>
-            <p>card_title：{createdResultCard.card_title ?? "未返回"}</p>
-            <p>card_subtitle：{createdResultCard.card_subtitle ?? "未返回"}</p>
-            <p>share_count：{createdResultCard.share_count ?? "未返回"}</p>
-            <p>generated_at：{createdResultCard.generated_at ?? "未返回"}</p>
-          </div>
+        <>
+          <OperationMessage
+            description="当前仅生成战绩海报记录，不生成真实图片，不接分享 SDK。"
+            items={[
+              `result_card_id：${createdResultCard.result_card_id ?? "未返回"}`,
+              `card_title：${createdResultCard.card_title ?? "未返回"}`,
+              `card_subtitle：${createdResultCard.card_subtitle ?? "未返回"}`,
+              `share_count：${createdResultCard.share_count ?? "未返回"}`,
+              `generated_at：${createdResultCard.generated_at ?? "未返回"}`,
+            ]}
+            title={
+              cardStatus === "already_exists"
+                ? "该牌局已生成战绩海报记录"
+                : "战绩海报记录已生成"
+            }
+            type={cardStatus === "already_exists" ? "warning" : "success"}
+          />
           {createdResultCard.result_card_id ? (
             <Link
               className="mt-5 inline-flex rounded-full bg-[#12332a] px-5 py-3 text-sm font-semibold text-[#fff8ea]"
@@ -250,43 +260,39 @@ export default async function NewGamePage({ searchParams }: NewGamePageProps) {
               查看战绩海报
             </Link>
           ) : null}
-        </section>
+        </>
       ) : null}
 
       {errorMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">创建失败</p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            {errorMessage}
-          </p>
-        </section>
+        <OperationMessage
+          description={errorMessage}
+          title="创建失败"
+          type="error"
+        />
       ) : null}
 
       {cardErrorMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">生成失败</p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            {cardErrorMessage}
-          </p>
-        </section>
+        <OperationMessage
+          description={cardErrorMessage}
+          title="生成失败"
+          type="error"
+        />
       ) : null}
 
       {participantErrorMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">添加失败</p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            {participantErrorMessage}
-          </p>
-        </section>
+        <OperationMessage
+          description={participantErrorMessage}
+          title="添加失败"
+          type="error"
+        />
       ) : null}
 
       {resultErrorMessage ? (
-        <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">保存失败</p>
-          <p className="mt-3 text-sm leading-7 text-[#4d665e]">
-            {resultErrorMessage}
-          </p>
-        </section>
+        <OperationMessage
+          description={resultErrorMessage}
+          title="保存失败"
+          type="error"
+        />
       ) : null}
 
       <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
@@ -815,11 +821,9 @@ function SmallMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EmptyLine({ children }: { children: ReactNode }) {
+function EmptyLine({ children }: { children: string }) {
   return (
-    <p className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
-      {children}
-    </p>
+    <OperationMessage description={children} title="暂无数据" type="info" />
   );
 }
 

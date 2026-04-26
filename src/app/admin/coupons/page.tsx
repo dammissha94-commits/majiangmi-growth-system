@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { redeemCouponRedemptionAction } from "@/app/admin/coupons/actions";
+import { OperationMessage } from "@/components/operation-message";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listClaimedCouponRedemptionsByStore,
@@ -50,13 +51,16 @@ export default async function AdminCouponsPage({
         <p className="mt-3 leading-7 text-[#e8dbc4]">
           查看卡券名称、类型、有效期、领取用户与核销表现。
         </p>
-        <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
-          当前仅更新门店卡券核销状态，不涉及任何资金处理。
-        </p>
         <p className="mt-3 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <OperationMessage
+        description="当前仅更新门店卡券核销状态，不涉及任何资金处理。"
+        title="当前步骤边界"
+        type="info"
+      />
 
       <RedeemFeedback
         couponName={getSearchParam(params, "coupon_name")}
@@ -113,9 +117,11 @@ export default async function AdminCouponsPage({
 
         <div className="mt-5 grid gap-3">
           {pageData.data.claimedRedemptions.length === 0 ? (
-            <div className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
-              暂无已领取待核销记录。
-            </div>
+            <OperationMessage
+              description="当前没有 status = claimed 的卡券领取记录。"
+              title="暂无已领取待核销记录"
+              type="info"
+            />
           ) : (
             pageData.data.claimedRedemptions.map((redemption) => (
               <article
@@ -169,9 +175,11 @@ export default async function AdminCouponsPage({
 
       <section className="mt-6 grid gap-4">
         {pageData.data.coupons.length === 0 ? (
-          <div className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-6 text-sm leading-7 text-[#4d665e]">
-            暂无卡券数据。
-          </div>
+          <OperationMessage
+            description="当前门店暂无卡券数据。"
+            title="暂无卡券数据"
+            type="info"
+          />
         ) : (
           pageData.data.coupons.map((coupon) => {
             const claimedCount = coupon.redemptions.length;
@@ -393,10 +401,7 @@ function RedeemFeedback({
 }) {
   if (error) {
     return (
-      <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5 text-sm leading-7 text-[#7c2d12]">
-        <p className="font-semibold">核销失败</p>
-        <p className="mt-2">{error}</p>
-      </section>
+      <OperationMessage description={error} title="核销失败" type="error" />
     );
   }
 
@@ -412,13 +417,21 @@ function RedeemFeedback({
         : "卡券已核销";
 
   return (
-    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 text-sm leading-7 text-[#12332a]">
-      <p className="font-semibold">{title}</p>
-      <p className="mt-2">卡券名称：{couponName ?? "未命名卡券"}</p>
-      <p>用户名称：{userName ?? "未命名用户"}</p>
-      <p>status = {redemptionStatus ?? "used"}</p>
-      {usedAt ? <p>used_at：{formatDateTime(usedAt)}</p> : null}
-    </section>
+    <OperationMessage
+      description={
+        status === "used"
+          ? "当前仅更新门店卡券核销状态，不涉及任何资金处理。"
+          : title
+      }
+      items={[
+        `卡券名称：${couponName ?? "未命名卡券"}`,
+        `用户名称：${userName ?? "未命名用户"}`,
+        `status = ${redemptionStatus ?? "used"}`,
+        ...(usedAt ? [`used_at：${formatDateTime(usedAt)}`] : []),
+      ]}
+      title={title}
+      type={status === "used" ? "success" : "warning"}
+    />
   );
 }
 
