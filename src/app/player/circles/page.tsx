@@ -1,17 +1,26 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { getFirstActiveStore } from "@/lib/services/dashboard_service";
+import { inviteUserToCircleAction } from "./actions";
+import { OperationMessage } from "@/components/operation-message";
 import {
   listCirclesWithMembersByStore,
   type CircleWithDetails,
 } from "@/lib/services/circle_service";
+import { listCouponClaimUsers } from "@/lib/services/coupon_service";
+import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 
 export const dynamic = "force-dynamic";
 
 type PlayerCirclePageData = {
   circles: CircleWithDetails[];
+  store_id: string;
   store_name: string;
+  users: { display_name: string; id: string }[];
+};
+
+type PlayerCirclesPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 type Metric = {
@@ -20,8 +29,11 @@ type Metric = {
   value: number;
 };
 
-export default async function PlayerCirclesPage() {
+export default async function PlayerCirclesPage({
+  searchParams,
+}: PlayerCirclesPageProps) {
   const pageData = await loadPlayerCirclePageData();
+  const params = (await searchParams) ?? {};
 
   if (pageData.status === "empty") {
     return <PlayerCircleShell>{renderNoStoreState()}</PlayerCircleShell>;
@@ -29,6 +41,8 @@ export default async function PlayerCirclesPage() {
 
   const metrics = buildMetrics(pageData.data.circles);
   const tips = buildTips(pageData.data.circles);
+  const inviteStatus = getParam(params, "invite_status");
+  const inviteError = getParam(params, "invite_error");
 
   return (
     <PlayerCircleShell>
@@ -43,6 +57,13 @@ export default async function PlayerCirclesPage() {
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <InviteFeedback
+        error={inviteError}
+        referredName={getParam(params, "referred_name")}
+        referrerName={getParam(params, "referrer_name")}
+        status={inviteStatus}
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         {metrics.map((metric) => (
@@ -81,72 +102,130 @@ export default async function PlayerCirclesPage() {
             暂无熟人圈数据。
           </div>
         ) : (
-          pageData.data.circles.map((circle) => (
-            <article
-              className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 shadow-sm"
-              key={circle.id}
-            >
-              <div className="grid gap-5 md:grid-cols-[1fr_0.9fr] md:items-start">
-                <div>
-                  <h2 className="text-2xl font-semibold">{circle.name}</h2>
-                  <p className="mt-2 text-sm text-[#4d665e]">
-                    圈主：{circle.owner?.display_name ?? "未命名圈主"}
-                  </p>
-                  <p className="mt-2 text-sm text-[#4d665e]">
-                    最近活跃：{formatDateTime(circle.last_active_at)}
-                  </p>
-                  <p className="mt-2 text-sm text-[#4d665e]">
-                    状态：{circle.status}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <MetricCard label="成员数" value={`${circle.member_count} 人`} />
-                  <MetricCard label="累计局数" value={`${circle.game_count} 局`} />
-                </div>
-              </div>
+          pageData.data.circles.map((circle) => {
+            const invitableUsers = pageData.data.users.filter(
+              (user) => user.id !== circle.owner_user_id,
+            );
 
-              <div className="mt-5 rounded-2xl bg-[#f7f1e6] p-4">
-                <p className="text-sm font-semibold text-[#9b7428]">成员列表</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {circle.members.length > 0 ? (
-                    circle.members.map((member) => (
-                      <span
-                        className="rounded-full bg-[#f1dba5] px-3 py-1 text-xs font-semibold"
-                        key={member.id}
-                      >
-                        {member.user?.display_name ?? "未命名成员"}
+            return (
+              <article
+                className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 shadow-sm"
+                key={circle.id}
+              >
+                <div className="grid gap-5 md:grid-cols-[1fr_0.9fr] md:items-start">
+                  <div>
+                    <h2 className="text-2xl font-semibold">{circle.name}</h2>
+                    <p className="mt-2 text-sm text-[#4d665e]">
+                      圈主：{circle.owner?.display_name ?? "未命名圈主"}
+                    </p>
+                    <p className="mt-2 text-sm text-[#4d665e]">
+                      最近活跃：{formatDateTime(circle.last_active_at)}
+                    </p>
+                    <p className="mt-2 text-sm text-[#4d665e]">
+                      状态：{circle.status}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricCard
+                      label="成员数"
+                      value={`${circle.member_count} 人`}
+                    />
+                    <MetricCard
+                      label="累计局数"
+                      value={`${circle.game_count} 局`}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-[#f7f1e6] p-4">
+                  <p className="text-sm font-semibold text-[#9b7428]">
+                    成员列表
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {circle.members.length > 0 ? (
+                      circle.members.map((member) => (
+                        <span
+                          className="rounded-full bg-[#f1dba5] px-3 py-1 text-xs font-semibold"
+                          key={member.id}
+                        >
+                          {member.user?.display_name ?? "未命名成员"}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="rounded-full bg-[#fff8ea] px-3 py-1 text-xs font-semibold text-[#5d756d]">
+                        暂无成员
                       </span>
-                    ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-[#f7f1e6] p-4">
+                  <p className="text-sm font-semibold text-[#9b7428]">
+                    邀请好友加入
+                  </p>
+                  {invitableUsers.length === 0 ? (
+                    <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+                      暂无可邀请用户。
+                    </p>
                   ) : (
-                    <span className="rounded-full bg-[#fff8ea] px-3 py-1 text-xs font-semibold text-[#5d756d]">
-                      暂无成员
-                    </span>
+                    <form
+                      action={inviteUserToCircleAction}
+                      className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"
+                    >
+                      <input
+                        name="circle_id"
+                        type="hidden"
+                        value={circle.id}
+                      />
+                      <input
+                        name="store_id"
+                        type="hidden"
+                        value={pageData.data.store_id}
+                      />
+                      <input
+                        name="referrer_user_id"
+                        type="hidden"
+                        value={circle.owner_user_id}
+                      />
+                      <select
+                        className="min-h-12 rounded-2xl border border-[#dbc99e] bg-[#fff8ea] px-4 py-3 text-sm text-[#12332a] outline-none focus:border-[#b7892c]"
+                        name="referred_user_id"
+                        required
+                      >
+                        <option value="">请选择要邀请的好友</option>
+                        {invitableUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.display_name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="rounded-full bg-[#12332a] px-5 py-3 text-sm font-semibold text-[#fff8ea] transition hover:bg-[#173f35]"
+                        type="submit"
+                      >
+                        发出邀请
+                      </button>
+                    </form>
                   )}
                 </div>
-              </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <button
-                  className="rounded-full border border-[#b7892c] px-4 py-3 text-sm font-semibold text-[#12332a]"
-                  type="button"
-                >
-                  查看圈子
-                </button>
-                <button
-                  className="rounded-full bg-[#d3a443] px-4 py-3 text-sm font-semibold text-[#12332a]"
-                  type="button"
-                >
-                  预约下一局
-                </button>
-                <button
-                  className="rounded-full border border-[#b7892c] px-4 py-3 text-sm font-semibold text-[#12332a]"
-                  type="button"
-                >
-                  邀请好友
-                </button>
-              </div>
-            </article>
-          ))
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <button
+                    className="rounded-full border border-[#b7892c] px-4 py-3 text-sm font-semibold text-[#12332a]"
+                    type="button"
+                  >
+                    查看圈子
+                  </button>
+                  <button
+                    className="rounded-full bg-[#d3a443] px-4 py-3 text-sm font-semibold text-[#12332a]"
+                    type="button"
+                  >
+                    预约下一局
+                  </button>
+                </div>
+              </article>
+            );
+          })
         )}
       </section>
     </PlayerCircleShell>
@@ -163,12 +242,17 @@ async function loadPlayerCirclePageData(): Promise<
     return { status: "empty" };
   }
 
-  const circles = await listCirclesWithMembersByStore(store.id);
+  const [circles, users] = await Promise.all([
+    listCirclesWithMembersByStore(store.id),
+    listCouponClaimUsers(),
+  ]);
 
   return {
     data: {
       circles,
+      store_id: store.id,
       store_name: store.name,
+      users,
     },
     status: "ready",
   };
@@ -233,6 +317,54 @@ function formatDateTime(value: string | null): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function getParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+): string | null {
+  const value = params[key];
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+function InviteFeedback({
+  error,
+  referredName,
+  referrerName,
+  status,
+}: {
+  error: string | null;
+  referredName: string | null;
+  referrerName: string | null;
+  status: string | null;
+}) {
+  if (error) {
+    return (
+      <OperationMessage description={error} title="邀请失败" type="error" />
+    );
+  }
+
+  if (!status) {
+    return null;
+  }
+
+  const isRepeated = status === "already_invited";
+
+  return (
+    <OperationMessage
+      items={[
+        `邀请人：${referrerName ?? "未命名用户"}`,
+        `被邀请人：${referredName ?? "未命名用户"}`,
+      ]}
+      title={isRepeated ? "该用户已被邀请过" : "邀请已发出"}
+      type={isRepeated ? "warning" : "success"}
+    />
+  );
 }
 
 function PlayerCircleShell({ children }: { children: ReactNode }) {
