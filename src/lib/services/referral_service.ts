@@ -1,5 +1,11 @@
 import { createSupabaseServerClient as createClient } from "@/lib/supabase/server";
-import type { Referral, ReferralInsert, User } from "@/types/domain";
+import type { Circle, Referral, ReferralInsert, User } from "@/types/domain";
+
+export type ReferralWithDetails = Referral & {
+  circle: Pick<Circle, "name"> | null;
+  referred: Pick<User, "display_name"> | null;
+  referrer: Pick<User, "display_name"> | null;
+};
 
 export type InviteUserToCircleInput = {
   circle_id: string;
@@ -92,6 +98,82 @@ async function getUserDisplayName(
   }
 
   return data as Pick<User, "display_name"> | null;
+}
+
+export async function listReferralsWithDetailsByStore(
+  storeId: string,
+): Promise<ReferralWithDetails[]> {
+  const supabase = await createClient();
+  const { data: referrals, error: referralError } = await supabase
+    .from("referrals")
+    .select("*")
+    .eq("store_id", storeId)
+    .order("created_at", { ascending: false });
+
+  if (referralError) {
+    throw new Error(
+      `list_referrals_with_details_by_store_failed: ${referralError.message}`,
+    );
+  }
+
+  const referralRows = (referrals ?? []) as Referral[];
+
+  if (referralRows.length === 0) {
+    return [];
+  }
+
+  const userIds = Array.from(
+    new Set([
+      ...referralRows.map((r) => r.referrer_user_id),
+      ...referralRows.map((r) => r.referred_user_id),
+    ]),
+  );
+  const circleIds = Array.from(
+    new Set(
+      referralRows
+        .map((r) => r.circle_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const [
+    { data: users, error: userError },
+    { data: circles, error: circleError },
+  ] = await Promise.all([
+    supabase.from("users").select("id, display_name").in("id", userIds),
+    circleIds.length > 0
+      ? supabase.from("circles").select("id, name").in("id", circleIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (userError) {
+    throw new Error(
+      `list_referrals_with_details_by_store_failed: ${userError.message}`,
+    );
+  }
+
+  if (circleError) {
+    throw new Error(
+      `list_referrals_with_details_by_store_failed: ${circleError.message}`,
+    );
+  }
+
+  const usersById = new Map(
+    ((users ?? []) as Pick<User, "id" | "display_name">[]).map((u) => [
+      u.id,
+      u,
+    ]),
+  );
+  const circlesById = new Map(
+    ((circles ?? []) as Pick<Circle, "id" | "name">[]).map((c) => [c.id, c]),
+  );
+
+  return referralRows.map((r) => ({
+    ...r,
+    circle: r.circle_id ? (circlesById.get(r.circle_id) ?? null) : null,
+    referred: usersById.get(r.referred_user_id) ?? null,
+    referrer: usersById.get(r.referrer_user_id) ?? null,
+  }));
 }
 
 export async function createReferral(

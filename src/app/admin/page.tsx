@@ -24,6 +24,7 @@ const navItems = [
   { title: "预约管理", href: "/admin/reservations" },
   { title: "卡券管理", href: "/admin/coupons" },
   { title: "活动管理", href: "/admin/campaigns" },
+  { title: "邀请记录", href: "/admin/referrals" },
   { title: "数据复盘", href: "/admin/dashboard" },
 ];
 
