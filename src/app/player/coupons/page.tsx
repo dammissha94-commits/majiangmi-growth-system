@@ -1,9 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { claimCouponForUserAction } from "@/app/player/coupons/actions";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
+  listCouponClaimUsers,
   listCouponsWithRedemptionsByStore,
+  type CouponClaimUser,
   type CouponWithRedemptions,
 } from "@/lib/services/coupon_service";
 
@@ -11,7 +14,13 @@ export const dynamic = "force-dynamic";
 
 type PlayerCouponPageData = {
   coupons: CouponWithRedemptions[];
+  store_id: string;
   store_name: string;
+  users: CouponClaimUser[];
+};
+
+type PlayerCouponsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 type Metric = {
@@ -20,8 +29,11 @@ type Metric = {
   value: number;
 };
 
-export default async function PlayerCouponsPage() {
+export default async function PlayerCouponsPage({
+  searchParams,
+}: PlayerCouponsPageProps) {
   const pageData = await loadPlayerCouponPageData();
+  const params = (await searchParams) ?? {};
 
   if (pageData.status === "empty") {
     return <CouponShell>{renderNoStoreState()}</CouponShell>;
@@ -29,6 +41,8 @@ export default async function PlayerCouponsPage() {
 
   const metrics = buildMetrics(pageData.data.coupons);
   const tips = buildTips(pageData.data.coupons);
+  const claimStatus = getSearchParam(params, "claim_status");
+  const claimError = getSearchParam(params, "claim_error");
 
   return (
     <CouponShell>
@@ -40,9 +54,20 @@ export default async function PlayerCouponsPage() {
           查看门店当前可用卡券，适合搭配熟人圈开局和下一次预约使用。
         </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
+          当前仅创建门店卡券领取记录，不涉及任何资金处理。
+        </p>
+        <p className="mt-3 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <ClaimFeedback
+        couponName={getSearchParam(params, "coupon_name")}
+        error={claimError}
+        redemptionStatus={getSearchParam(params, "redemption_status")}
+        status={claimStatus}
+        userName={getSearchParam(params, "user_name")}
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         {metrics.map((metric) => (
@@ -101,7 +126,8 @@ export default async function PlayerCouponsPage() {
                       </span>
                     </div>
                     <p className="mt-3 leading-7 text-[#4d665e]">
-                      {coupon.description ?? "门店服务权益，适合下次到店使用。"}
+                      {coupon.description ??
+                        "门店服务权益，适合下一次到店使用。"}
                     </p>
                     <p className="mt-3 text-sm text-[#5d756d]">
                       有效期：{formatDateTime(coupon.valid_from)} 至{" "}
@@ -114,7 +140,7 @@ export default async function PlayerCouponsPage() {
 
                   <div className="grid grid-cols-2 gap-3 sm:min-w-48">
                     <SmallMetric label="领取人数" value={`${claimedCount} 人`} />
-                    <SmallMetric label="核销人数" value={`${usedCount} 人`} />
+                    <SmallMetric label="使用人数" value={`${usedCount} 人`} />
                   </div>
                 </div>
 
@@ -131,6 +157,47 @@ export default async function PlayerCouponsPage() {
                   >
                     去预约下一局
                   </button>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-[#f7f1e6] p-4">
+                  <p className="text-sm font-semibold text-[#9b7428]">
+                    领取卡券
+                  </p>
+                  {pageData.data.users.length === 0 ? (
+                    <p className="mt-3 text-sm leading-7 text-[#4d665e]">
+                      暂无可领取用户。
+                    </p>
+                  ) : (
+                    <form
+                      action={claimCouponForUserAction}
+                      className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"
+                    >
+                      <input name="coupon_id" type="hidden" value={coupon.id} />
+                      <input
+                        name="store_id"
+                        type="hidden"
+                        value={pageData.data.store_id}
+                      />
+                      <select
+                        className="min-h-12 rounded-2xl border border-[#dbc99e] bg-[#fff8ea] px-4 py-3 text-sm text-[#12332a] outline-none focus:border-[#b7892c]"
+                        name="user_id"
+                        required
+                      >
+                        <option value="">请选择领取用户</option>
+                        {pageData.data.users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.display_name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="rounded-full bg-[#12332a] px-5 py-3 text-sm font-semibold text-[#fff8ea]"
+                        type="submit"
+                      >
+                        领取卡券
+                      </button>
+                    </form>
+                  )}
                 </div>
               </article>
             );
@@ -151,13 +218,18 @@ async function loadPlayerCouponPageData(): Promise<
     return { status: "empty" };
   }
 
-  const coupons = await listCouponsWithRedemptionsByStore(store.id);
+  const [coupons, users] = await Promise.all([
+    listCouponsWithRedemptionsByStore(store.id),
+    listCouponClaimUsers(),
+  ]);
   const activeCoupons = coupons.filter((coupon) => coupon.status === "active");
 
   return {
     data: {
       coupons: activeCoupons,
+      store_id: store.id,
       store_name: store.name,
+      users,
     },
     status: "ready",
   };
@@ -179,7 +251,7 @@ function buildMetrics(coupons: CouponWithRedemptions[]): Metric[] {
   return [
     { label: "可用卡券总数", suffix: "张", value: coupons.length },
     { label: "已领取数量", suffix: "张", value: claimedCount },
-    { label: "已核销数量", suffix: "张", value: usedCount },
+    { label: "已使用数量", suffix: "张", value: usedCount },
   ];
 }
 
@@ -240,6 +312,59 @@ function formatDateTime(value: string | null): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function getSearchParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+): string | null {
+  const value = params[key];
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+function ClaimFeedback({
+  couponName,
+  error,
+  redemptionStatus,
+  status,
+  userName,
+}: {
+  couponName: string | null;
+  error: string | null;
+  redemptionStatus: string | null;
+  status: string | null;
+  userName: string | null;
+}) {
+  if (error) {
+    return (
+      <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5 text-sm leading-7 text-[#7c2d12]">
+        <p className="font-semibold">领取失败</p>
+        <p className="mt-2">{error}</p>
+      </section>
+    );
+  }
+
+  if (!status) {
+    return null;
+  }
+
+  const isRepeated = status === "already_exists";
+
+  return (
+    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 text-sm leading-7 text-[#12332a]">
+      <p className="font-semibold">
+        {isRepeated ? "该用户已领取过这张卡券" : "卡券已领取"}
+      </p>
+      <p className="mt-2">卡券名称：{couponName ?? "未命名卡券"}</p>
+      <p>领取用户：{userName ?? "未命名用户"}</p>
+      <p>status = {redemptionStatus ?? "claimed"}</p>
+    </section>
+  );
 }
 
 function CouponShell({ children }: { children: ReactNode }) {
