@@ -1,18 +1,27 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { incrementShareCountAction } from "./actions";
+import { OperationMessage } from "@/components/operation-message";
 import { getResultCardDetailsForPlayer } from "@/lib/services/result_card_service";
 
 export const dynamic = "force-dynamic";
 
 type ResultCardPageProps = {
-  params: Promise<{
-    id: string;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    shared?: string;
+    share_count?: string;
+    share_error?: string;
   }>;
 };
 
-export default async function ResultCardPage({ params }: ResultCardPageProps) {
+export default async function ResultCardPage({
+  params,
+  searchParams,
+}: ResultCardPageProps) {
   const { id } = await params;
+  const sp = await searchParams;
   const details = await getResultCardDetailsForPlayer(id);
 
   if (!details) {
@@ -120,12 +129,40 @@ export default async function ResultCardPage({ params }: ResultCardPageProps) {
               </div>
             )}
           </section>
+
+          {sp.shared === "1" ? (
+            <OperationMessage
+              description={`当前分享次数：${sp.share_count ?? details.result_card.share_count} 次`}
+              title="海报已分享"
+              type="success"
+            />
+          ) : null}
+
+          {sp.share_error ? (
+            <OperationMessage
+              description={sp.share_error}
+              title="分享失败"
+              type="error"
+            />
+          ) : null}
         </div>
       </section>
 
       <section className="mt-5 grid gap-3 sm:grid-cols-3">
         <StaticActionButton>保存海报</StaticActionButton>
-        <StaticActionButton>邀请好友</StaticActionButton>
+        <form action={incrementShareCountAction}>
+          <input
+            name="result_card_id"
+            type="hidden"
+            value={details.result_card.id}
+          />
+          <button
+            className="w-full rounded-full bg-[#d3a443] px-5 py-3 text-center text-sm font-semibold text-[#12332a] transition hover:bg-[#e5bd67]"
+            type="submit"
+          >
+            邀请好友
+          </button>
+        </form>
         <StaticActionButton>预约下一局</StaticActionButton>
       </section>
     </ResultShell>
