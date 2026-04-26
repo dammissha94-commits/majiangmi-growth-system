@@ -30,6 +30,18 @@ export type ClaimCouponForUserResult = {
   user: Pick<User, "display_name"> | null;
 };
 
+export type ClaimedCouponRedemption = CouponRedemption & {
+  coupon: Pick<Coupon, "name"> | null;
+  user: Pick<User, "display_name"> | null;
+};
+
+export type RedeemCouponRedemptionResult = {
+  coupon: Pick<Coupon, "name"> | null;
+  redemption: CouponRedemption;
+  status: "already_used" | "invalid_status" | "used";
+  user: Pick<User, "display_name"> | null;
+};
+
 export async function listCouponsByStore(
   store_id: string,
 ): Promise<Coupon[]> {
@@ -117,6 +129,78 @@ export async function listCouponsWithRedemptionsByStore(
         ...redemption,
         user: usersById.get(redemption.user_id) ?? null,
       })),
+  }));
+}
+
+export async function listClaimedCouponRedemptionsByStore(
+  storeId: string,
+): Promise<ClaimedCouponRedemption[]> {
+  const supabase = await createClient();
+  const { data: redemptions, error: redemptionError } = await supabase
+    .from("coupon_redemptions")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("status", "claimed")
+    .order("claimed_at", { ascending: true });
+
+  if (redemptionError) {
+    throw new Error(
+      `list_claimed_coupon_redemptions_by_store_failed: ${redemptionError.message}`,
+    );
+  }
+
+  const redemptionRows = (redemptions ?? []) as CouponRedemption[];
+
+  if (redemptionRows.length === 0) {
+    return [];
+  }
+
+  const couponIds = Array.from(
+    new Set(redemptionRows.map((redemption) => redemption.coupon_id)),
+  );
+  const userIds = Array.from(
+    new Set(redemptionRows.map((redemption) => redemption.user_id)),
+  );
+
+  const { data: coupons, error: couponError } = await supabase
+    .from("coupons")
+    .select("id, name")
+    .in("id", couponIds);
+
+  if (couponError) {
+    throw new Error(
+      `list_claimed_coupon_redemptions_by_store_failed: ${couponError.message}`,
+    );
+  }
+
+  const { data: users, error: userError } = await supabase
+    .from("users")
+    .select("id, display_name")
+    .in("id", userIds);
+
+  if (userError) {
+    throw new Error(
+      `list_claimed_coupon_redemptions_by_store_failed: ${userError.message}`,
+    );
+  }
+
+  const couponsById = new Map(
+    ((coupons ?? []) as Pick<Coupon, "id" | "name">[]).map((coupon) => [
+      coupon.id,
+      coupon,
+    ]),
+  );
+  const usersById = new Map(
+    ((users ?? []) as Pick<User, "display_name" | "id">[]).map((user) => [
+      user.id,
+      user,
+    ]),
+  );
+
+  return redemptionRows.map((redemption) => ({
+    ...redemption,
+    coupon: couponsById.get(redemption.coupon_id) ?? null,
+    user: usersById.get(redemption.user_id) ?? null,
   }));
 }
 
@@ -241,6 +325,73 @@ export async function claimCouponForUser(
   };
 }
 
+export async function redeemCouponRedemption(
+  redemptionId: string,
+): Promise<RedeemCouponRedemptionResult> {
+  const supabase = await createClient();
+  const { data: existingRedemption, error: existingError } = await supabase
+    .from("coupon_redemptions")
+    .select("*")
+    .eq("id", redemptionId)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(
+      `redeem_coupon_redemption_failed: ${existingError.message}`,
+    );
+  }
+
+  if (!existingRedemption) {
+    throw new Error("redeem_coupon_redemption_failed: redemption_not_found");
+  }
+
+  const redemption = existingRedemption as CouponRedemption;
+  const coupon = await getCouponNameForRedemption(redemption.coupon_id);
+  const user = await getUserNameForRedemption(redemption.user_id);
+
+  if (redemption.status === "used") {
+    return {
+      coupon,
+      redemption,
+      status: "already_used",
+      user,
+    };
+  }
+
+  if (redemption.status !== "claimed") {
+    return {
+      coupon,
+      redemption,
+      status: "invalid_status",
+      user,
+    };
+  }
+
+  const usedAt = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("coupon_redemptions")
+    .update({
+      status: "used",
+      updated_at: usedAt,
+      used_at: usedAt,
+    })
+    .eq("id", redemptionId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`redeem_coupon_redemption_failed: ${error.message}`);
+  }
+
+  return {
+    coupon,
+    redemption: data,
+    status: "used",
+    user,
+  };
+}
+
 export async function redeemCoupon(
   coupon_redemption_id: string,
 ): Promise<CouponRedemption> {
@@ -290,6 +441,42 @@ async function getUserNameForClaim(
 
   if (error) {
     throw new Error(`claim_coupon_for_user_failed: ${error.message}`);
+  }
+
+  return data as Pick<User, "display_name"> | null;
+}
+
+async function getCouponNameForRedemption(
+  couponId: string,
+): Promise<Pick<Coupon, "name"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("coupons")
+    .select("name")
+    .eq("id", couponId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`redeem_coupon_redemption_failed: ${error.message}`);
+  }
+
+  return data as Pick<Coupon, "name"> | null;
+}
+
+async function getUserNameForRedemption(
+  userId: string,
+): Promise<Pick<User, "display_name"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("display_name")
+    .eq("id", userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`redeem_coupon_redemption_failed: ${error.message}`);
   }
 
   return data as Pick<User, "display_name"> | null;

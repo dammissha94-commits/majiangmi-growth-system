@@ -1,17 +1,25 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { redeemCouponRedemptionAction } from "@/app/admin/coupons/actions";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
+  listClaimedCouponRedemptionsByStore,
   listCouponsWithRedemptionsByStore,
+  type ClaimedCouponRedemption,
   type CouponWithRedemptions,
 } from "@/lib/services/coupon_service";
 
 export const dynamic = "force-dynamic";
 
 type CouponPageData = {
+  claimedRedemptions: ClaimedCouponRedemption[];
   coupons: CouponWithRedemptions[];
   store_name: string;
+};
+
+type AdminCouponsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 type Metric = {
@@ -20,8 +28,11 @@ type Metric = {
   value: number;
 };
 
-export default async function AdminCouponsPage() {
+export default async function AdminCouponsPage({
+  searchParams,
+}: AdminCouponsPageProps) {
   const pageData = await loadCouponPageData();
+  const params = (await searchParams) ?? {};
 
   if (pageData.status === "empty") {
     return <CouponShell>{renderNoStoreState()}</CouponShell>;
@@ -40,9 +51,21 @@ export default async function AdminCouponsPage() {
           查看卡券名称、类型、有效期、领取用户与核销表现。
         </p>
         <p className="mt-4 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
+          当前仅更新门店卡券核销状态，不涉及任何资金处理。
+        </p>
+        <p className="mt-3 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <RedeemFeedback
+        couponName={getSearchParam(params, "coupon_name")}
+        error={getSearchParam(params, "redeem_error")}
+        redemptionStatus={getSearchParam(params, "redemption_status")}
+        status={getSearchParam(params, "redeem_status")}
+        usedAt={getSearchParam(params, "used_at")}
+        userName={getSearchParam(params, "user_name")}
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => (
@@ -72,6 +95,75 @@ export default async function AdminCouponsPage() {
               {suggestion}
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[#9b7428]">
+              待核销领取记录
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold">已领取卡券</h2>
+          </div>
+          <p className="text-sm text-[#5d756d]">
+            共 {pageData.data.claimedRedemptions.length} 条
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-3">
+          {pageData.data.claimedRedemptions.length === 0 ? (
+            <div className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+              暂无已领取待核销记录。
+            </div>
+          ) : (
+            pageData.data.claimedRedemptions.map((redemption) => (
+              <article
+                className="grid gap-4 rounded-2xl bg-[#f7f1e6] p-4 lg:grid-cols-[1fr_auto] lg:items-center"
+                key={redemption.id}
+              >
+                <div className="grid gap-2 text-sm text-[#4d665e] sm:grid-cols-2 lg:grid-cols-4">
+                  <p>
+                    <span className="font-semibold text-[#12332a]">
+                      卡券名称：
+                    </span>
+                    {redemption.coupon?.name ?? "未命名卡券"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#12332a]">
+                      领取用户：
+                    </span>
+                    {redemption.user?.display_name ?? "未命名用户"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#12332a]">
+                      claimed_at：
+                    </span>
+                    {formatDateTime(redemption.claimed_at)}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#12332a]">
+                      status：
+                    </span>
+                    {redemption.status}
+                  </p>
+                </div>
+                <form action={redeemCouponRedemptionAction}>
+                  <input
+                    name="redemption_id"
+                    type="hidden"
+                    value={redemption.id}
+                  />
+                  <button
+                    className="w-full rounded-full bg-[#12332a] px-5 py-3 text-sm font-semibold text-[#fff8ea] lg:w-auto"
+                    type="submit"
+                  >
+                    核销卡券
+                  </button>
+                </form>
+              </article>
+            ))
+          )}
         </div>
       </section>
 
@@ -158,10 +250,14 @@ async function loadCouponPageData(): Promise<
     return { status: "empty" };
   }
 
-  const coupons = await listCouponsWithRedemptionsByStore(store.id);
+  const [coupons, claimedRedemptions] = await Promise.all([
+    listCouponsWithRedemptionsByStore(store.id),
+    listClaimedCouponRedemptionsByStore(store.id),
+  ]);
 
   return {
     data: {
+      claimedRedemptions,
       coupons,
       store_name: store.name,
     },
@@ -263,8 +359,67 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+function getSearchParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+): string | null {
+  const value = params[key];
+
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
 function formatQuantity(value: number | null): string {
   return value === null ? "不限量" : `${value} 张`;
+}
+
+function RedeemFeedback({
+  couponName,
+  error,
+  redemptionStatus,
+  status,
+  usedAt,
+  userName,
+}: {
+  couponName: string | null;
+  error: string | null;
+  redemptionStatus: string | null;
+  status: string | null;
+  usedAt: string | null;
+  userName: string | null;
+}) {
+  if (error) {
+    return (
+      <section className="mt-6 rounded-3xl border border-[#b7892c] bg-[#fff8ea] p-5 text-sm leading-7 text-[#7c2d12]">
+        <p className="font-semibold">核销失败</p>
+        <p className="mt-2">{error}</p>
+      </section>
+    );
+  }
+
+  if (!status) {
+    return null;
+  }
+
+  const title =
+    status === "already_used"
+      ? "该卡券已核销"
+      : status === "invalid_status"
+        ? "只有已领取状态的卡券可以核销"
+        : "卡券已核销";
+
+  return (
+    <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 text-sm leading-7 text-[#12332a]">
+      <p className="font-semibold">{title}</p>
+      <p className="mt-2">卡券名称：{couponName ?? "未命名卡券"}</p>
+      <p>用户名称：{userName ?? "未命名用户"}</p>
+      <p>status = {redemptionStatus ?? "used"}</p>
+      {usedAt ? <p>used_at：{formatDateTime(usedAt)}</p> : null}
+    </section>
+  );
 }
 
 function CouponShell({ children }: { children: ReactNode }) {
