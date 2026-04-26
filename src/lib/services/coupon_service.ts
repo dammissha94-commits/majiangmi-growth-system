@@ -236,6 +236,28 @@ export async function listUserCoupons(
   return data ?? [];
 }
 
+export async function findFirstActiveCouponByStore(
+  storeId: string,
+): Promise<Coupon | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("coupons")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("status", "active")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `find_first_active_coupon_by_store_failed: ${error.message}`,
+    );
+  }
+
+  return data as Coupon | null;
+}
+
 export async function createCoupon(input: CouponInsert): Promise<Coupon> {
   const supabase = await createClient();
   const { data, error } = await supabase

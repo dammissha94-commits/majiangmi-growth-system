@@ -59,6 +59,7 @@ export default async function PlayerCirclesPage({
       </header>
 
       <InviteFeedback
+        couponName={getParam(params, "coupon_name")}
         error={inviteError}
         referredName={getParam(params, "referred_name")}
         referrerName={getParam(params, "referrer_name")}
@@ -333,11 +334,13 @@ function getParam(
 }
 
 function InviteFeedback({
+  couponName,
   error,
   referredName,
   referrerName,
   status,
 }: {
+  couponName: string | null;
   error: string | null;
   referredName: string | null;
   referrerName: string | null;
@@ -354,13 +357,18 @@ function InviteFeedback({
   }
 
   const isRepeated = status === "already_invited";
+  const items = [
+    `邀请人：${referrerName ?? "未命名用户"}`,
+    `被邀请人：${referredName ?? "未命名用户"}`,
+  ];
+
+  if (!isRepeated && couponName) {
+    items.push(`已自动发放卡券：${couponName}`);
+  }
 
   return (
     <OperationMessage
-      items={[
-        `邀请人：${referrerName ?? "未命名用户"}`,
-        `被邀请人：${referredName ?? "未命名用户"}`,
-      ]}
+      items={items}
       title={isRepeated ? "该用户已被邀请过" : "邀请已发出"}
       type={isRepeated ? "warning" : "success"}
     />
