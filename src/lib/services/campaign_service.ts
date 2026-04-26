@@ -10,6 +10,18 @@ import type {
   User,
 } from "@/types/domain";
 
+export type SignUpForCampaignInput = {
+  campaign_id: string;
+  user_id: string;
+};
+
+export type SignUpForCampaignResult = {
+  campaign: Pick<Campaign, "name"> | null;
+  participant: CampaignParticipant | null;
+  status: "already_signed_up" | "signed_up";
+  user: Pick<User, "display_name"> | null;
+};
+
 export type CampaignParticipantWithDetails = CampaignParticipant & {
   circle: Pick<Circle, "name"> | null;
   reservation: Pick<
@@ -22,6 +34,114 @@ export type CampaignParticipantWithDetails = CampaignParticipant & {
 export type CampaignWithParticipants = Campaign & {
   participants: CampaignParticipantWithDetails[];
 };
+
+export async function listEnrollingCampaignsByStore(
+  storeId: string,
+): Promise<Campaign[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("*")
+    .eq("store_id", storeId)
+    .in("status", ["published", "enrolling", "running"])
+    .order("starts_at", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      `list_enrolling_campaigns_by_store_failed: ${error.message}`,
+    );
+  }
+
+  return (data ?? []) as Campaign[];
+}
+
+export async function signUpForCampaign(
+  input: SignUpForCampaignInput,
+): Promise<SignUpForCampaignResult> {
+  const supabase = await createClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("campaign_participants")
+    .select("*")
+    .eq("campaign_id", input.campaign_id)
+    .eq("user_id", input.user_id)
+    .neq("status", "cancelled")
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`sign_up_for_campaign_failed: ${existingError.message}`);
+  }
+
+  const campaign = await getCampaignNameById(input.campaign_id);
+  const user = await getUserNameForCampaign(input.user_id);
+
+  if (existing) {
+    return {
+      campaign,
+      participant: existing as CampaignParticipant,
+      status: "already_signed_up",
+      user,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("campaign_participants")
+    .insert({
+      campaign_id: input.campaign_id,
+      signed_up_at: new Date().toISOString(),
+      status: "signed_up",
+      user_id: input.user_id,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(`sign_up_for_campaign_failed: ${error.message}`);
+  }
+
+  return {
+    campaign,
+    participant: data,
+    status: "signed_up",
+    user,
+  };
+}
+
+async function getCampaignNameById(
+  campaignId: string,
+): Promise<Pick<Campaign, "name"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("name")
+    .eq("id", campaignId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`sign_up_for_campaign_failed: ${error.message}`);
+  }
+
+  return data as Pick<Campaign, "name"> | null;
+}
+
+async function getUserNameForCampaign(
+  userId: string,
+): Promise<Pick<User, "display_name"> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("display_name")
+    .eq("id", userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`sign_up_for_campaign_failed: ${error.message}`);
+  }
+
+  return data as Pick<User, "display_name"> | null;
+}
 
 export async function listCampaignsByStore(
   store_id: string,

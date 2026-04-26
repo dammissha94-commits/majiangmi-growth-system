@@ -67,6 +67,11 @@ const shortcuts: Shortcut[] = [
     href: "/player/results/test",
     title: "最新战绩海报",
   },
+  {
+    description: "查看招募中活动，选择圈子报名参与。",
+    href: "/player/campaigns",
+    title: "门店活动",
+  },
 ];
 
 export default async function PlayerPage() {
@@ -110,7 +115,7 @@ export default async function PlayerPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-5 py-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shortcuts.map((shortcut) => (
             <Link
               className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 shadow-sm transition hover:border-[#b7892c]"
