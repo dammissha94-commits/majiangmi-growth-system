@@ -1,11 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { getFirstActiveStore } from "@/lib/services/dashboard_service";
+import { markParticipantArrivedAction } from "./actions";
+import { OperationMessage } from "@/components/operation-message";
 import {
   listCampaignsWithParticipantsByStore,
   type CampaignWithParticipants,
 } from "@/lib/services/campaign_service";
+import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +16,21 @@ type CampaignPageData = {
   store_name: string;
 };
 
+type AdminCampaignsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
 type Metric = {
   label: string;
   suffix: string;
   value: number;
 };
 
-export default async function AdminCampaignsPage() {
+export default async function AdminCampaignsPage({
+  searchParams,
+}: AdminCampaignsPageProps) {
   const pageData = await loadCampaignPageData();
+  const params = (await searchParams) ?? {};
 
   if (pageData.status === "empty") {
     return <CampaignShell>{renderNoStoreState()}</CampaignShell>;
@@ -29,6 +38,8 @@ export default async function AdminCampaignsPage() {
 
   const metrics = buildMetrics(pageData.data.campaigns);
   const suggestions = buildSuggestions(pageData.data.campaigns);
+  const arrivedStatus = getParam(params, "arrived_status");
+  const arrivedError = getParam(params, "arrived_error");
 
   return (
     <CampaignShell>
@@ -43,6 +54,8 @@ export default async function AdminCampaignsPage() {
           娱乐积分，仅作休闲记录。
         </p>
       </header>
+
+      <ArrivedFeedback arrivedError={arrivedError} arrivedStatus={arrivedStatus} />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => (
@@ -141,6 +154,31 @@ export default async function AdminCampaignsPage() {
                       <p className="mt-2 text-sm text-[#5d756d]">
                         参与状态：{participant.status}
                       </p>
+                      {participant.status === "signed_up" && (
+                        <form action={markParticipantArrivedAction} className="mt-3">
+                          <input
+                            name="participant_id"
+                            type="hidden"
+                            value={participant.id}
+                          />
+                          <input
+                            name="campaign_name"
+                            type="hidden"
+                            value={campaign.name}
+                          />
+                          <input
+                            name="user_name"
+                            type="hidden"
+                            value={participant.user?.display_name ?? "未命名用户"}
+                          />
+                          <button
+                            className="rounded-full bg-[#12332a] px-4 py-2 text-sm font-semibold text-[#f1dba5]"
+                            type="submit"
+                          >
+                            标记到店
+                          </button>
+                        </form>
+                      )}
                     </div>
                   ))
                 )}
@@ -323,4 +361,32 @@ function MetricCard({ label, value }: MetricCardProps) {
       <p className="mt-2 text-xl font-semibold">{value}</p>
     </div>
   );
+}
+
+function ArrivedFeedback({
+  arrivedError,
+  arrivedStatus,
+}: {
+  arrivedError: string | undefined;
+  arrivedStatus: string | undefined;
+}) {
+  if (arrivedStatus === "arrived") {
+    return <OperationMessage title="已成功标记到店" type="success" />;
+  }
+
+  if (arrivedError) {
+    return (
+      <OperationMessage title={`标记到店失败：${arrivedError}`} type="error" />
+    );
+  }
+
+  return null;
+}
+
+function getParam(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+): string | undefined {
+  const value = params[key];
+  return typeof value === "string" ? value : undefined;
 }
