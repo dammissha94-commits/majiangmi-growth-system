@@ -48,6 +48,24 @@
 
 ---
 
+### v0.3.0-growth-loop（已完成，已打 tag）
+1. 战绩海报分享计数（incrementResultCardShareCount Server Action）
+2. 玩家活动报名（signUpForCampaign，防重复报名）
+3. 熟人圈邀请好友（inviteUserToCircle，防重复邀请）
+4. 老板端邀请记录查看（/admin/referrals）
+5. 管理端活动参与者到店标记（markParticipantArrivedAction）
+6. 数据联动：圈子邀请成功后自动向被邀请人发放卡券
+
+#### 新增页面
+- /player/campaigns（玩家报名页）
+- /admin/referrals（邀请记录管理页）
+
+#### 技术说明
+- 数据联动在 Server Action 层编排，非关键路径失败不阻断主流程
+- 自动发券使用门店首个 active 卡券，结果通过 searchParams 回显
+
+---
+
 ## 当前注意事项
 1. 开发库 RLS 已临时关闭，正式上线前必须重新启用
 2. 当前不做登录、不做权限、不做支付、不做正式多门店隔离
@@ -61,4 +79,4 @@ npm run lint
 npm run build
 
 ## 下一阶段方向
-v0.3.0：RLS 权限设计 + Vercel 生产部署准备。
+v0.4.0：数据统计深化 + 玩家端数据回显（我的卡券、我的预约、我的活动报名）。
