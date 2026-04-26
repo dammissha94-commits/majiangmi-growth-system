@@ -94,194 +94,205 @@ export default async function PlayerPage() {
 
   return (
     <PlayerShell>
-      <section className="bg-[#12332a] px-5 py-8 text-[#fff8ea]">
+      {/* Hero */}
+      <section className="bg-[#12332a] px-5 pb-10 pt-8 text-[#fff8ea]">
         <div className="mx-auto max-w-6xl">
-          <Link className="text-sm text-[#f1dba5]" href="/">
+          <Link
+            className="text-sm text-[#f1dba5]/70 transition hover:text-[#f1dba5]"
+            href="/"
+          >
             麻将迷
           </Link>
-          <h1 className="mt-6 text-3xl font-semibold leading-tight">
+          <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">
             玩家中心
           </h1>
-          <p className="mt-3 text-xl font-semibold">
+          <p className="mt-2 text-lg font-medium text-[#f1dba5]">
             {pageData.data.store_name}
           </p>
-          <p className="mt-3 max-w-2xl leading-7 text-[#e8dbc4]">
+          <p className="mt-4 max-w-md text-sm leading-7 text-[#c8bca8]">
             从熟人圈到下一局预约，把每一次到店沉淀成可分享、可复购的休闲体验。
           </p>
-          <p className="mt-5 rounded-2xl border border-[#d3a443]/50 bg-[#173f35] p-4 text-sm text-[#f1dba5]">
-            娱乐积分，仅作休闲记录。
-          </p>
-        </div>
-      </section>
+          <span className="mt-5 inline-block rounded-full border border-[#d3a443]/40 bg-[#173f35] px-4 py-1.5 text-xs font-medium text-[#f1dba5]">
+            娱乐积分，仅作休闲记录
+          </span>
 
-      <section className="mx-auto max-w-6xl px-5 py-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {shortcuts.map((shortcut) => (
-            <Link
-              className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5 shadow-sm transition hover:border-[#b7892c]"
-              href={shortcut.href}
-              key={shortcut.title}
-            >
-              <p className="text-xl font-semibold">{shortcut.title}</p>
-              <p className="mt-3 leading-7 text-[#4d665e]">
-                {shortcut.description}
-              </p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-5 pb-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {metrics.map((metric) => (
-            <article
-              className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5"
-              key={metric.label}
-            >
-              <p className="text-sm text-[#5d756d]">{metric.label}</p>
-              <p className="mt-3 text-3xl font-semibold">
-                {metric.value}
-                <span className="ml-1 text-base font-medium text-[#5d756d]">
-                  {metric.suffix}
-                </span>
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-5 pb-8">
-        <div className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
-          <p className="text-sm font-semibold text-[#9b7428]">今日建议</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {tips.map((tip) => (
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {metrics.map((metric) => (
               <div
-                className="rounded-2xl bg-[#f7f1e6] p-4 text-sm font-medium leading-6"
-                key={tip}
+                className="rounded-2xl bg-[#173f35] px-4 py-4"
+                key={metric.label}
               >
-                {tip}
+                <p className="text-xs text-[#c8bca8]">{metric.label}</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {metric.value}
+                  <span className="ml-1 text-sm font-normal text-[#c8bca8]">
+                    {metric.suffix}
+                  </span>
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-6xl gap-5 px-5 pb-10 lg:grid-cols-2">
-        <OverviewSection title="推荐熟人圈">
+      {/* Quick Actions */}
+      <section className="mx-auto max-w-6xl px-5 py-8">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#9b7428]">
+          快速操作
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {shortcuts.map((shortcut) => (
+            <Link
+              className="group flex items-start justify-between gap-4 rounded-2xl border border-[#dbc99e] bg-[#fff8ea] p-5 transition hover:border-[#b7892c]"
+              href={shortcut.href}
+              key={shortcut.title}
+            >
+              <div>
+                <p className="font-semibold text-[#12332a]">{shortcut.title}</p>
+                <p className="mt-1.5 text-sm leading-6 text-[#5d756d]">
+                  {shortcut.description}
+                </p>
+              </div>
+              <span className="mt-0.5 shrink-0 text-[#d3a443] opacity-50 transition group-hover:opacity-100">
+                →
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Data Overview */}
+      <div className="mx-auto max-w-6xl space-y-5 px-5 pb-12">
+        {/* 推荐熟人圈 */}
+        <DataCard title="推荐熟人圈">
           {recommendedCircles.length === 0 ? (
-            <EmptyLine>暂无熟人圈数据。</EmptyLine>
+            <EmptyState>暂无熟人圈数据。</EmptyState>
           ) : (
-            <div className="grid gap-3">
+            <div className="space-y-2">
               {recommendedCircles.map((circle) => (
-                <article
-                  className="rounded-2xl bg-[#f7f1e6] p-4"
+                <div
+                  className="flex items-center justify-between gap-4 rounded-xl bg-[#f7f1e6] px-4 py-3"
                   key={circle.id}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-xl font-semibold">{circle.name}</h3>
-                      <p className="mt-2 text-sm text-[#5d756d]">
-                        圈主：{circle.owner?.display_name ?? "未命名用户"}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-[#12332a]">
+                      {circle.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[#5d756d]">
+                      圈主：{circle.owner?.display_name ?? "未命名用户"}
+                      {" · "}
+                      {circle.member_count} 人 · {circle.game_count} 局
+                    </p>
+                  </div>
+                  {circle.member_count >= 4 ? (
+                    <span className="shrink-0 rounded-full bg-[#d3a443] px-2.5 py-1 text-xs font-semibold text-[#12332a]">
+                      可开局
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </DataCard>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          {/* 可用卡券预览 */}
+          <DataCard title="可用卡券">
+            {couponPreview.length === 0 ? (
+              <EmptyState>暂无可用卡券。</EmptyState>
+            ) : (
+              <div className="space-y-2">
+                {couponPreview.map((coupon) => (
+                  <div
+                    className="rounded-xl bg-[#f7f1e6] px-4 py-3"
+                    key={coupon.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-[#12332a]">
+                        {coupon.name}
                       </p>
-                    </div>
-                    {circle.member_count >= 4 ? (
-                      <span className="rounded-full bg-[#f1dba5] px-3 py-1 text-xs font-semibold">
-                        可开局
+                      <span className="shrink-0 rounded-full border border-[#dbc99e] bg-[#fff8ea] px-2 py-0.5 text-xs text-[#9b7428]">
+                        {formatCouponType(coupon.coupon_type)}
                       </span>
-                    ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-[#5d756d]">
+                      {formatDateTime(coupon.valid_from)} —{" "}
+                      {formatDateTime(coupon.valid_to)}
+                    </p>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <SmallMetric
-                      label="成员数"
-                      value={`${circle.member_count} 人`}
-                    />
-                    <SmallMetric
-                      label="累计局数"
-                      value={`${circle.game_count} 局`}
-                    />
+                ))}
+              </div>
+            )}
+          </DataCard>
+
+          {/* 今日预约预览 */}
+          <DataCard title="今日预约">
+            {reservationPreview.length === 0 ? (
+              <EmptyState>今日暂无预约。</EmptyState>
+            ) : (
+              <div className="space-y-2">
+                {reservationPreview.map((reservation) => (
+                  <div
+                    className="rounded-xl bg-[#f7f1e6] px-4 py-3"
+                    key={reservation.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-[#12332a]">
+                        {reservation.room?.name ?? "未命名包厢"}
+                      </p>
+                      <span className="shrink-0 rounded-full border border-[#dbc99e] bg-[#fff8ea] px-2 py-0.5 text-xs text-[#5d756d]">
+                        {reservation.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[#5d756d]">
+                      {reservation.start_time} — {reservation.end_time}
+                      {reservation.circle ? ` · ${reservation.circle.name}` : ""}
+                    </p>
                   </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </OverviewSection>
+                ))}
+              </div>
+            )}
+          </DataCard>
+        </div>
 
-        <OverviewSection title="可用卡券预览">
-          {couponPreview.length === 0 ? (
-            <EmptyLine>暂无可用卡券。</EmptyLine>
-          ) : (
-            <div className="grid gap-3">
-              {couponPreview.map((coupon) => (
-                <article
-                  className="rounded-2xl bg-[#f7f1e6] p-4"
-                  key={coupon.id}
-                >
-                  <h3 className="text-xl font-semibold">{coupon.name}</h3>
-                  <p className="mt-2 text-sm text-[#5d756d]">
-                    类型：{formatCouponType(coupon.coupon_type)}
-                  </p>
-                  <p className="mt-2 text-sm text-[#5d756d]">
-                    有效期：{formatDateTime(coupon.valid_from)} 至{" "}
-                    {formatDateTime(coupon.valid_to)}
-                  </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </OverviewSection>
-
-        <OverviewSection title="今日预约预览">
-          {reservationPreview.length === 0 ? (
-            <EmptyLine>今日暂无预约。</EmptyLine>
-          ) : (
-            <div className="grid gap-3">
-              {reservationPreview.map((reservation) => (
-                <article
-                  className="rounded-2xl bg-[#f7f1e6] p-4"
-                  key={reservation.id}
-                >
-                  <h3 className="text-xl font-semibold">
-                    {reservation.room?.name ?? "未命名包厢"}
-                  </h3>
-                  <p className="mt-2 text-sm text-[#5d756d]">
-                    圈子：{reservation.circle?.name ?? "未关联圈子"}
-                  </p>
-                  <p className="mt-2 text-sm text-[#5d756d]">
-                    时间：{reservation.start_time} - {reservation.end_time}
-                  </p>
-                  <p className="mt-2 text-sm text-[#5d756d]">
-                    状态：{reservation.status}
-                  </p>
-                </article>
-              ))}
-            </div>
-          )}
-        </OverviewSection>
-
-        <OverviewSection title="最新战绩海报预览">
+        {/* 最新战绩海报 */}
+        <DataCard title="最新战绩海报">
           {latestResultCard ? (
-            <article className="rounded-2xl bg-[#f7f1e6] p-4">
-              <h3 className="text-xl font-semibold">
+            <div className="rounded-xl bg-[#f7f1e6] p-4">
+              <p className="font-medium text-[#12332a]">
                 {latestResultCard.result_card.card_title}
-              </h3>
-              <p className="mt-2 text-sm text-[#5d756d]">
-                圈子：{latestResultCard.circle?.name ?? "未关联圈子"}
               </p>
-              <p className="mt-2 text-sm text-[#5d756d]">
-                分享次数：{latestResultCard.result_card.share_count} 次
+              <p className="mt-1 text-xs text-[#5d756d]">
+                {latestResultCard.circle?.name ?? "未关联圈子"}
+                {" · "}分享 {latestResultCard.result_card.share_count} 次
+                {" · "}MVP：{mvpResult?.user?.display_name ?? "暂无"}
               </p>
-              <p className="mt-2 text-sm text-[#5d756d]">
-                MVP 玩家：{mvpResult?.user?.display_name ?? "暂无"}
-              </p>
-              <p className="mt-4 rounded-2xl bg-[#12332a] p-3 text-sm text-[#f1dba5]">
+              <p className="mt-4 rounded-lg bg-[#12332a] px-3 py-2.5 text-xs font-medium text-[#f1dba5]">
                 娱乐积分，仅作休闲记录。
               </p>
-            </article>
+            </div>
           ) : (
-            <EmptyLine>暂无战绩海报数据。</EmptyLine>
+            <EmptyState>暂无战绩海报数据。</EmptyState>
           )}
-        </OverviewSection>
-      </section>
+        </DataCard>
+
+        {/* 今日建议 */}
+        <DataCard title="今日建议">
+          <div className="space-y-2">
+            {tips.map((tip, index) => (
+              <div
+                className="flex items-start gap-3 rounded-xl bg-[#f7f1e6] px-4 py-3"
+                key={tip}
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#12332a] text-xs font-semibold text-[#f1dba5]">
+                  {index + 1}
+                </span>
+                <p className="text-sm leading-6 text-[#12332a]">{tip}</p>
+              </div>
+            ))}
+          </div>
+        </DataCard>
+      </div>
     </PlayerShell>
   );
 }
@@ -414,10 +425,12 @@ function formatDateTime(value: string | null): string {
 }
 
 function PlayerShell({ children }: { children: ReactNode }) {
-  return <main className="min-h-screen bg-[#f7f1e6] text-[#12332a]">{children}</main>;
+  return (
+    <main className="min-h-screen bg-[#f7f1e6] text-[#12332a]">{children}</main>
+  );
 }
 
-function OverviewSection({
+function DataCard({
   children,
   title,
 }: {
@@ -426,24 +439,17 @@ function OverviewSection({
 }) {
   return (
     <section className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
-      <p className="text-sm font-semibold text-[#9b7428]">{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-[#9b7428]">
+        {title}
+      </p>
       <div className="mt-4">{children}</div>
     </section>
   );
 }
 
-function SmallMetric({ label, value }: { label: string; value: string }) {
+function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl bg-[#fff8ea] p-3">
-      <p className="text-xs text-[#5d756d]">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
-    </div>
-  );
-}
-
-function EmptyLine({ children }: { children: ReactNode }) {
-  return (
-    <p className="rounded-2xl bg-[#f7f1e6] p-4 text-sm leading-7 text-[#4d665e]">
+    <p className="rounded-xl bg-[#f7f1e6] px-4 py-3 text-sm text-[#5d756d]">
       {children}
     </p>
   );
