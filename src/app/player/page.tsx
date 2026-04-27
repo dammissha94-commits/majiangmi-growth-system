@@ -58,9 +58,9 @@ const shortcuts: Shortcut[] = [
     title: "我的卡券",
   },
   {
-    description: "选择包厢、日期与时段，生成预约草稿。",
-    href: "/player/reservations/new",
-    title: "预约下一局",
+    description: "查看我的预约记录，或生成新的预约草稿。",
+    href: "/player/reservations",
+    title: "我的预约",
   },
   {
     description: "查看最新娱乐积分海报，邀请好友下一局。",

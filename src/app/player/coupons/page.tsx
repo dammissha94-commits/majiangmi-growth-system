@@ -7,14 +7,18 @@ import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import {
   listCouponClaimUsers,
   listCouponsWithRedemptionsByStore,
+  listUserCouponRedemptionsWithCoupon,
   type CouponClaimUser,
   type CouponWithRedemptions,
+  type UserCouponRedemptionWithCoupon,
 } from "@/lib/services/coupon_service";
 
 export const dynamic = "force-dynamic";
 
 type PlayerCouponPageData = {
   coupons: CouponWithRedemptions[];
+  my_redemptions: UserCouponRedemptionWithCoupon[];
+  my_user_name: string;
   store_id: string;
   store_name: string;
   users: CouponClaimUser[];
@@ -44,6 +48,8 @@ export default async function PlayerCouponsPage({
   const tips = buildTips(pageData.data.coupons);
   const claimStatus = getSearchParam(params, "claim_status");
   const claimError = getSearchParam(params, "claim_error");
+  const myRedemptions = pageData.data.my_redemptions;
+  const myUserName = pageData.data.my_user_name;
 
   return (
     <CouponShell>
@@ -72,6 +78,54 @@ export default async function PlayerCouponsPage({
         status={claimStatus}
         userName={getSearchParam(params, "user_name")}
       />
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#9b7428]">
+          我的领取记录（演示用户：{myUserName}）
+        </p>
+        {myRedemptions.length === 0 ? (
+          <p className="mt-4 rounded-xl bg-[#f7f1e6] px-4 py-3 text-sm text-[#5d756d]">
+            该用户暂无领取记录。
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {myRedemptions.map((redemption) => (
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#f7f1e6] px-4 py-3"
+                key={redemption.id}
+              >
+                <div>
+                  <p className="font-medium text-[#12332a]">
+                    {redemption.coupon?.name ?? "未命名卡券"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#5d756d]">
+                    {redemption.coupon
+                      ? formatCouponType(redemption.coupon.coupon_type)
+                      : ""}
+                    {redemption.coupon?.valid_to
+                      ? ` · 有效至 ${formatDateTime(redemption.coupon.valid_to)}`
+                      : ""}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#5d756d]">
+                    领取时间：{formatDateTime(redemption.claimed_at)}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    redemption.status === "used"
+                      ? "bg-[#12332a] text-[#f1dba5]"
+                      : redemption.status === "claimed"
+                        ? "bg-[#f1dba5] text-[#12332a]"
+                        : "bg-[#f0d3d3] text-[#5a1a1a]"
+                  }`}
+                >
+                  {formatRedemptionStatus(redemption.status)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         {metrics.map((metric) => (
@@ -229,10 +283,16 @@ async function loadPlayerCouponPageData(): Promise<
     listCouponClaimUsers(),
   ]);
   const activeCoupons = coupons.filter((coupon) => coupon.status === "active");
+  const demoUser = users[0];
+  const myRedemptions = demoUser
+    ? await listUserCouponRedemptionsWithCoupon(demoUser.id, store.id)
+    : [];
 
   return {
     data: {
       coupons: activeCoupons,
+      my_redemptions: myRedemptions,
+      my_user_name: demoUser?.display_name ?? "未知用户",
       store_id: store.id,
       store_name: store.name,
       users,
@@ -295,6 +355,17 @@ function buildTips(coupons: CouponWithRedemptions[]): string[] {
   }
 
   return tips;
+}
+
+function formatRedemptionStatus(status: string): string {
+  const labels: Record<string, string> = {
+    cancelled: "已取消",
+    claimed: "已领取",
+    expired: "已过期",
+    used: "已使用",
+  };
+
+  return labels[status] ?? status;
 }
 
 function formatCouponType(couponType: string): string {

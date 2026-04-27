@@ -78,5 +78,39 @@ npm run compliance:check
 npm run lint
 npm run build
 
+---
+
+### v0.4.0-player-data-echo（已完成，已打 tag）
+1. 玩家端"我的预约"列表页（/player/reservations）
+2. 玩家端"我的卡券领取记录"（/player/coupons 新增个人领取历史区块）
+3. 玩家端"我的活动报名记录"（/player/campaigns 新增个人报名历史区块）
+
+#### 新增页面
+- /player/reservations（我的预约列表）
+
+#### 新增 Service 方法
+- coupon_service: listUserCouponRedemptionsWithCoupon(userId, storeId)
+- reservation_service: listUserReservationsWithDetails(userId, storeId)
+- campaign_service: listUserCampaignParticipationsWithCampaign(userId)
+
+#### 技术说明
+- 演示用户取门店第一个 active 用户，无需登录系统
+- 预约列表按日期倒序，区分"待确认/已确认"与"历史"两组
+- 卡券与活动记录均回显状态标签（颜色语义化）
+
+---
+
+## 当前注意事项
+1. 开发库 RLS 已临时关闭，正式上线前必须重新启用
+2. 当前不做登录、不做权限、不做支付、不做正式多门店隔离
+3. 所有页面使用硬编码 store_id / user_id 作为演示占位
+
+## 当前验收命令
+每次开发后必须执行：
+
+npm run compliance:check
+npm run lint
+npm run build
+
 ## 下一阶段方向
-v0.4.0：数据统计深化 + 玩家端数据回显（我的卡券、我的预约、我的活动报名）。
+v0.5.0：老板端经营数据深化（7天未到店用户、空置时段分析、活动转化率）。

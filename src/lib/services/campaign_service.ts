@@ -143,6 +143,64 @@ async function getUserNameForCampaign(
   return data as Pick<User, "display_name"> | null;
 }
 
+export type UserCampaignParticipationWithCampaign = CampaignParticipant & {
+  campaign: Pick<
+    Campaign,
+    "campaign_type" | "ends_at" | "name" | "starts_at" | "status"
+  > | null;
+};
+
+export async function listUserCampaignParticipationsWithCampaign(
+  userId: string,
+): Promise<UserCampaignParticipationWithCampaign[]> {
+  const supabase = await createClient();
+  const { data: participants, error: participantError } = await supabase
+    .from("campaign_participants")
+    .select("*")
+    .eq("user_id", userId)
+    .order("signed_up_at", { ascending: false });
+
+  if (participantError) {
+    throw new Error(
+      `list_user_campaign_participations_with_campaign_failed: ${participantError.message}`,
+    );
+  }
+
+  const participantRows = (participants ?? []) as CampaignParticipant[];
+
+  if (participantRows.length === 0) {
+    return [];
+  }
+
+  const campaignIds = Array.from(
+    new Set(participantRows.map((p) => p.campaign_id)),
+  );
+  const { data: campaigns, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id, name, campaign_type, starts_at, ends_at, status")
+    .in("id", campaignIds);
+
+  if (campaignError) {
+    throw new Error(
+      `list_user_campaign_participations_with_campaign_failed: ${campaignError.message}`,
+    );
+  }
+
+  const campaignsById = new Map(
+    (
+      (campaigns ?? []) as Pick<
+        Campaign,
+        "id" | "name" | "campaign_type" | "starts_at" | "ends_at" | "status"
+      >[]
+    ).map((c) => [c.id, c]),
+  );
+
+  return participantRows.map((p) => ({
+    ...p,
+    campaign: campaignsById.get(p.campaign_id) ?? null,
+  }));
+}
+
 export async function listCampaignsByStore(
   store_id: string,
 ): Promise<Campaign[]> {

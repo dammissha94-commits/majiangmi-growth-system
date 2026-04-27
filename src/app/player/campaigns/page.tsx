@@ -3,7 +3,11 @@ import type { ReactNode } from "react";
 
 import { signUpForCampaignAction } from "./actions";
 import { OperationMessage } from "@/components/operation-message";
-import { listEnrollingCampaignsByStore } from "@/lib/services/campaign_service";
+import {
+  listEnrollingCampaignsByStore,
+  listUserCampaignParticipationsWithCampaign,
+  type UserCampaignParticipationWithCampaign,
+} from "@/lib/services/campaign_service";
 import { getFirstActiveStore } from "@/lib/services/dashboard_service";
 import { listCouponClaimUsers } from "@/lib/services/coupon_service";
 import type { Campaign } from "@/types/domain";
@@ -16,6 +20,8 @@ type PlayerCampaignsPageProps = {
 
 type PageData = {
   campaigns: Campaign[];
+  my_participations: UserCampaignParticipationWithCampaign[];
+  my_user_name: string;
   store_id: string;
   store_name: string;
   users: { display_name: string; id: string }[];
@@ -33,6 +39,8 @@ export default async function PlayerCampaignsPage({
 
   const signupStatus = getParam(params, "signup_status");
   const signupError = getParam(params, "signup_error");
+  const myParticipations = pageData.data.my_participations;
+  const myUserName = pageData.data.my_user_name;
 
   return (
     <Shell>
@@ -54,6 +62,48 @@ export default async function PlayerCampaignsPage({
         status={signupStatus}
         userName={getParam(params, "user_name")}
       />
+
+      <section className="mt-6 rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-5">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#9b7428]">
+          我的报名记录（演示用户：{myUserName}）
+        </p>
+        {myParticipations.length === 0 ? (
+          <p className="mt-4 rounded-xl bg-[#f7f1e6] px-4 py-3 text-sm text-[#5d756d]">
+            该用户暂无活动报名记录。
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3">
+            {myParticipations.map((participation) => (
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#f7f1e6] px-4 py-3"
+                key={participation.id}
+              >
+                <div>
+                  <p className="font-medium text-[#12332a]">
+                    {participation.campaign?.name ?? "未命名活动"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#5d756d]">
+                    {participation.campaign
+                      ? formatCampaignType(participation.campaign.campaign_type)
+                      : ""}
+                    {participation.campaign?.starts_at
+                      ? ` · ${formatDateTime(participation.campaign.starts_at)}`
+                      : ""}
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#5d756d]">
+                    报名时间：{formatDateTime(participation.signed_up_at)}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${formatParticipantStatusStyle(participation.status)}`}
+                >
+                  {formatParticipantStatus(participation.status)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="mt-6 grid gap-4">
         {pageData.data.campaigns.length === 0 ? (
@@ -149,16 +199,46 @@ async function loadPageData(): Promise<
     listEnrollingCampaignsByStore(store.id),
     listCouponClaimUsers(),
   ]);
+  const demoUser = users[0];
+  const myParticipations = demoUser
+    ? await listUserCampaignParticipationsWithCampaign(demoUser.id)
+    : [];
 
   return {
     data: {
       campaigns,
+      my_participations: myParticipations,
+      my_user_name: demoUser?.display_name ?? "未知用户",
       store_id: store.id,
       store_name: store.name,
       users,
     },
     status: "ready",
   };
+}
+
+function formatParticipantStatus(status: string): string {
+  const labels: Record<string, string> = {
+    arrived: "已到店",
+    cancelled: "已取消",
+    completed: "已完成",
+    no_show: "未到店",
+    signed_up: "已报名",
+  };
+
+  return labels[status] ?? status;
+}
+
+function formatParticipantStatusStyle(status: string): string {
+  if (status === "arrived" || status === "completed") {
+    return "bg-[#12332a] text-[#f1dba5]";
+  }
+
+  if (status === "cancelled" || status === "no_show") {
+    return "bg-[#f0d3d3] text-[#5a1a1a]";
+  }
+
+  return "bg-[#f1dba5] text-[#12332a]";
 }
 
 function formatCampaignType(campaignType: string): string {

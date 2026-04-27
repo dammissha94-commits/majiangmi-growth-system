@@ -236,6 +236,63 @@ export async function listUserCoupons(
   return data ?? [];
 }
 
+export type UserCouponRedemptionWithCoupon = CouponRedemption & {
+  coupon: Pick<Coupon, "coupon_type" | "name" | "valid_from" | "valid_to"> | null;
+};
+
+export async function listUserCouponRedemptionsWithCoupon(
+  userId: string,
+  storeId: string,
+): Promise<UserCouponRedemptionWithCoupon[]> {
+  const supabase = await createClient();
+  const { data: redemptions, error: redemptionError } = await supabase
+    .from("coupon_redemptions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("store_id", storeId)
+    .order("claimed_at", { ascending: false });
+
+  if (redemptionError) {
+    throw new Error(
+      `list_user_coupon_redemptions_with_coupon_failed: ${redemptionError.message}`,
+    );
+  }
+
+  const redemptionRows = (redemptions ?? []) as CouponRedemption[];
+
+  if (redemptionRows.length === 0) {
+    return [];
+  }
+
+  const couponIds = Array.from(
+    new Set(redemptionRows.map((r) => r.coupon_id)),
+  );
+  const { data: coupons, error: couponError } = await supabase
+    .from("coupons")
+    .select("id, name, coupon_type, valid_from, valid_to")
+    .in("id", couponIds);
+
+  if (couponError) {
+    throw new Error(
+      `list_user_coupon_redemptions_with_coupon_failed: ${couponError.message}`,
+    );
+  }
+
+  const couponsById = new Map(
+    (
+      (coupons ?? []) as Pick<
+        Coupon,
+        "id" | "name" | "coupon_type" | "valid_from" | "valid_to"
+      >[]
+    ).map((c) => [c.id, c]),
+  );
+
+  return redemptionRows.map((r) => ({
+    ...r,
+    coupon: couponsById.get(r.coupon_id) ?? null,
+  }));
+}
+
 export async function findFirstActiveCouponByStore(
   storeId: string,
 ): Promise<Coupon | null> {

@@ -157,6 +157,97 @@ export async function listReservationsWithDetailsByStore(
   }));
 }
 
+export async function listUserReservationsWithDetails(
+  userId: string,
+  storeId: string,
+): Promise<ReservationWithDetails[]> {
+  const supabase = await createClient();
+  const { data: reservations, error: reservationError } = await supabase
+    .from("reservations")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("store_id", storeId)
+    .order("reservation_date", { ascending: false })
+    .order("start_time", { ascending: false });
+
+  if (reservationError) {
+    throw new Error(
+      `list_user_reservations_with_details_failed: ${reservationError.message}`,
+    );
+  }
+
+  const reservationRows = (reservations ?? []) as Reservation[];
+
+  if (reservationRows.length === 0) {
+    return [];
+  }
+
+  const roomIds = Array.from(
+    new Set(reservationRows.map((r) => r.room_id)),
+  );
+  const circleIds = Array.from(
+    new Set(
+      reservationRows
+        .map((r) => r.circle_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const [
+    { data: rooms, error: roomError },
+    { data: circles, error: circleError },
+    { data: users, error: userError },
+  ] = await Promise.all([
+    supabase.from("rooms").select("id, name").in("id", roomIds),
+    circleIds.length > 0
+      ? supabase.from("circles").select("id, name").in("id", circleIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("users")
+      .select("id, display_name")
+      .eq("id", userId)
+      .limit(1),
+  ]);
+
+  if (roomError) {
+    throw new Error(
+      `list_user_reservations_with_details_failed: ${roomError.message}`,
+    );
+  }
+
+  if (circleError) {
+    throw new Error(
+      `list_user_reservations_with_details_failed: ${circleError.message}`,
+    );
+  }
+
+  if (userError) {
+    throw new Error(
+      `list_user_reservations_with_details_failed: ${userError.message}`,
+    );
+  }
+
+  const roomsById = new Map(
+    ((rooms ?? []) as Pick<Room, "id" | "name">[]).map((r) => [r.id, r]),
+  );
+  const circlesById = new Map(
+    ((circles ?? []) as Pick<Circle, "id" | "name">[]).map((c) => [c.id, c]),
+  );
+  const usersById = new Map(
+    ((users ?? []) as Pick<User, "id" | "display_name">[]).map((u) => [
+      u.id,
+      u,
+    ]),
+  );
+
+  return reservationRows.map((r) => ({
+    ...r,
+    circle: r.circle_id ? (circlesById.get(r.circle_id) ?? null) : null,
+    room: roomsById.get(r.room_id) ?? null,
+    user: usersById.get(r.user_id) ?? null,
+  }));
+}
+
 export async function createReservation(
   input: ReservationInsert,
 ): Promise<Reservation> {
