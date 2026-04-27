@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 const loopSteps = [
   "扫码入店",
   "加入会员",
@@ -62,10 +64,18 @@ const plans = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f7f1e6] text-[#12332a]">
+      {/* 导航栏 */}
       <nav className="sticky top-0 z-20 border-b border-[#d9c9a3]/60 bg-[#f7f1e6]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <a className="text-lg font-semibold tracking-wide" href="#hero">
-            麻将迷
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
+          <a className="flex items-center gap-2.5" href="#hero">
+            <Image
+              alt="麻将迷"
+              className="rounded-lg"
+              height={36}
+              src="/logo.png"
+              width={36}
+            />
+            <span className="text-lg font-semibold tracking-wide">麻将迷</span>
           </a>
           <div className="hidden items-center gap-6 text-sm text-[#38594f] md:flex">
             <a className="transition hover:text-[#b7892c]" href="#loop">
@@ -90,13 +100,23 @@ export default function Home() {
         </div>
       </nav>
 
+      {/* Hero */}
       <section
-        id="hero"
         className="relative overflow-hidden bg-[#12332a] text-[#fff8ea]"
+        id="hero"
       >
         <div className="absolute inset-x-0 top-0 h-px bg-[#d3a443]" />
-        <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-[1.08fr_0.92fr] md:items-center md:py-24">
+        <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-2 md:items-center md:py-24">
           <div>
+            <div className="mb-5 flex items-center gap-3">
+              <Image
+                alt="麻将迷"
+                className="rounded-2xl"
+                height={56}
+                src="/logo.png"
+                width={56}
+              />
+            </div>
             <p className="mb-4 inline-flex rounded-full border border-[#d3a443]/60 px-3 py-1 text-sm text-[#f1dba5]">
               社区棋牌室品牌升级与复购增长
             </p>
@@ -122,31 +142,21 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-[#d3a443]/50 bg-[#173f35] p-5 shadow-2xl shadow-black/20">
-            <div className="rounded-[1.5rem] bg-[#fff8ea] p-5 text-[#12332a]">
-              <p className="text-sm font-medium text-[#8a6b23]">老板看板摘要</p>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                {["今日预约", "新增会员", "老客复购", "卡券核销"].map((item) => (
-                  <div
-                    className="rounded-2xl border border-[#e4d3ad] bg-[#fbf6ea] p-4"
-                    key={item}
-                  >
-                    <p className="text-sm text-[#5d756d]">{item}</p>
-                    <p className="mt-3 text-2xl font-semibold text-[#12332a]">
-                      稳步增长
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 rounded-2xl bg-[#12332a] p-4 text-[#fff8ea]">
-                <p className="text-sm text-[#f1dba5]">下一步运营动作</p>
-                <p className="mt-2 text-lg font-semibold">发放复购券，推动再次预约</p>
-              </div>
-            </div>
+          {/* 门店外观实景 */}
+          <div className="overflow-hidden rounded-[2rem] shadow-2xl shadow-black/40">
+            <Image
+              alt="麻将迷门店外观"
+              className="w-full object-cover"
+              height={500}
+              priority
+              src="/store-hero.png"
+              width={640}
+            />
           </div>
         </div>
       </section>
 
+      {/* 商业闭环 */}
       <section className="mx-auto max-w-6xl px-5 py-14" id="loop">
         <div className="max-w-3xl">
           <p className="text-sm font-semibold text-[#9b7428]">商业闭环</p>
@@ -172,6 +182,46 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 门店实景展示 */}
+      <section className="mx-auto max-w-6xl px-5 pb-14">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="overflow-hidden rounded-3xl shadow-md">
+            <Image
+              alt="麻将迷包厢内景"
+              className="h-64 w-full object-cover md:h-80"
+              height={500}
+              src="/store-room.png"
+              width={800}
+            />
+          </div>
+          <div className="overflow-hidden rounded-3xl shadow-md">
+            <Image
+              alt="麻将迷前台接待"
+              className="h-64 w-full object-cover md:h-80"
+              height={500}
+              src="/store-reception.png"
+              width={800}
+            />
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+          {[
+            { label: "私密包厢", desc: "专属空间，沉浸体验" },
+            { label: "品质牌桌", desc: "自动麻将机，全程无忧" },
+            { label: "专业服务", desc: "茶点配套，管家式接待" },
+          ].map((item) => (
+            <div
+              className="rounded-2xl border border-[#dbc99e] bg-[#fff8ea] px-4 py-5"
+              key={item.label}
+            >
+              <p className="font-semibold text-[#12332a]">{item.label}</p>
+              <p className="mt-1.5 text-sm text-[#5d756d]">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 核心价值 */}
       <section className="bg-[#fff8ea] py-14" id="value">
         <div className="mx-auto grid max-w-6xl gap-5 px-5 md:grid-cols-2">
           <ValuePanel
@@ -187,6 +237,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 14天试点 */}
       <section className="mx-auto max-w-6xl px-5 py-14" id="pilot">
         <div className="grid gap-8 md:grid-cols-[0.85fr_1.15fr] md:items-start">
           <div>
@@ -208,6 +259,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 合作套餐 */}
       <section className="bg-[#12332a] py-14 text-[#fff8ea]" id="plans">
         <div className="mx-auto max-w-6xl px-5">
           <div className="max-w-3xl">
@@ -243,6 +295,7 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 合规边界 */}
       <section className="mx-auto max-w-6xl px-5 py-14">
         <div className="rounded-3xl border border-[#dbc99e] bg-[#fff8ea] p-6 md:p-8">
           <p className="text-sm font-semibold text-[#9b7428]">合规边界</p>
@@ -255,6 +308,25 @@ export default function Home() {
           </p>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-[#d9c9a3]/60 bg-[#f7f1e6]">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-6">
+          <div className="flex items-center gap-2.5">
+            <Image
+              alt="麻将迷"
+              className="rounded-lg opacity-80"
+              height={28}
+              src="/logo.png"
+              width={28}
+            />
+            <span className="text-sm font-medium text-[#5d756d]">
+              麻将迷 MAJIANGMI
+            </span>
+          </div>
+          <p className="text-xs text-[#9b7428]">娱乐积分，仅作休闲记录</p>
+        </div>
+      </footer>
     </main>
   );
 }

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -97,11 +98,17 @@ export default async function PlayerPage() {
       {/* Hero */}
       <section className="bg-[#12332a] px-5 pb-10 pt-8 text-[#fff8ea]">
         <div className="mx-auto max-w-6xl">
-          <Link
-            className="text-sm text-[#f1dba5]/70 transition hover:text-[#f1dba5]"
-            href="/"
-          >
-            麻将迷
+          <Link className="flex items-center gap-2" href="/">
+            <Image
+              alt="麻将迷"
+              className="rounded-lg"
+              height={28}
+              src="/logo.png"
+              width={28}
+            />
+            <span className="text-sm text-[#f1dba5]/70 transition hover:text-[#f1dba5]">
+              麻将迷
+            </span>
           </Link>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-5xl">
             玩家中心
